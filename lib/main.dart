@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:app_links/app_links.dart';
@@ -163,7 +164,34 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
+      builder: (context, child) {
+        return _wrapWithWebFrame(child ?? const SizedBox.shrink());
+      },
       home: const HomePage(),
+    );
+  }
+
+  Widget _wrapWithWebFrame(Widget child) {
+    if (!kIsWeb) return child;
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 900) return child;
+
+        return ColoredBox(
+          color: AppColors.background,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: child,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
