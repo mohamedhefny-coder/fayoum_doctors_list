@@ -1,6 +1,5 @@
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
@@ -35,12 +34,15 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
   }
 
   Future<Uint8List?> _captureQrPng() async {
-    final boundary = _qrKey.currentContext?.findRenderObject()
-        as RenderRepaintBoundary?;
+    final boundary = _qrKey.currentContext?.findRenderObject();
     if (boundary == null) return null;
-    final image = await boundary.toImage(pixelRatio: 3.0);
-    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
-    return byteData?.buffer.asUint8List();
+    try {
+      final image = await (boundary as dynamic).toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    }
   }
 
   void _showShareSheet() {
