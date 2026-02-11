@@ -43,9 +43,7 @@ jobs:
           CUSTOM_DOMAIN: ${{ vars.CUSTOM_DOMAIN }}
         run: |
           set -eux
-          # Allow deep links on GitHub Pages by serving index.html for 404s
           cp build/web/index.html build/web/404.html
-          # Disable Jekyll processing
           touch build/web/.nojekyll
 
           if [ -n "${CUSTOM_DOMAIN:-}" ]; then
