@@ -1,5 +1,10 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../models/doctor_model.dart';
 import '../models/doctor_working_hours.dart';
@@ -23,6 +28,94 @@ class DoctorDetailScreen extends StatefulWidget {
 
 class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
   double _userRating = 0;
+  final GlobalKey _qrKey = GlobalKey();
+
+  String _doctorShareLink() {
+    return 'fayoumdoctors://doctor/${widget.doctor.id}';
+  }
+
+  Future<Uint8List?> _captureQrPng() async {
+    final boundary = _qrKey.currentContext?.findRenderObject()
+        as RenderRepaintBoundary?;
+    if (boundary == null) return null;
+    final image = await boundary.toImage(pixelRatio: 3.0);
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData?.buffer.asUint8List();
+  }
+
+  void _showShareSheet() {
+    final link = _doctorShareLink();
+
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      backgroundColor: Colors.white,
+      builder: (context) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'مشاركة صفحة الطبيب',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF8FAFC),
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: RepaintBoundary(
+                    key: _qrKey,
+                    child: QrImageView(
+                      data: link,
+                      size: 200,
+                      backgroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final bytes = await _captureQrPng();
+                      if (!context.mounted) return;
+                      if (bytes == null) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('تعذر إنشاء كود QR للمشاركة.'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      await Share.shareXFiles(
+                        [
+                          XFile.fromData(
+                            bytes,
+                            name: 'doctor_qr.png',
+                            mimeType: 'image/png',
+                          ),
+                        ],
+                        text: 'كود QR لصفحة الطبيب',
+                      );
+                    },
+                    icon: const Icon(Icons.qr_code_2),
+                    label: const Text('مشاركة كود QR'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   String _extractCityFromLocation(String? raw) {
     final t = (raw ?? '').trim();
@@ -332,6 +425,13 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
               expandedHeight: 350,
               pinned: true,
               backgroundColor: widget.cardColor,
+              actions: [
+                IconButton(
+                  tooltip: 'مشاركة',
+                  icon: const Icon(Icons.qr_code_2),
+                  onPressed: _showShareSheet,
+                ),
+              ],
               flexibleSpace: FlexibleSpaceBar(background: _buildHeroHeader(db)),
             ),
             SliverToBoxAdapter(
@@ -1314,7 +1414,8 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                                     Text(
                                       widget.doctor.isBookingEnabled
                                           ? 'خطوات سريعة داخل التطبيق'
-                                          : 'جرّب التواصل هاتفياً أو واتساب',
+ 
+                                        : 'جرّب التواصل هاتفياً أو واتساب',
                                       style: TextStyle(
                                         color: Colors.white.withValues(
                                           alpha: 0.90,

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:app_links/app_links.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/admin_login_screen.dart';
 import 'screens/doctor_login_screen.dart';
 import 'screens/doctor_profile_screen.dart';
+import 'screens/doctor_detail_screen.dart';
 import 'screens/specialty_doctors_screen.dart';
 import 'screens/quick_actions_screen.dart';
 import 'screens/my_appointments_screen.dart';
@@ -31,8 +33,112 @@ void main() async {
   runApp(const FayoumDoctorsApp());
 }
 
-class FayoumDoctorsApp extends StatelessWidget {
+class FayoumDoctorsApp extends StatefulWidget {
   const FayoumDoctorsApp({super.key});
+
+  @override
+  State<FayoumDoctorsApp> createState() => _FayoumDoctorsAppState();
+}
+
+class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+  final _appLinks = AppLinks();
+  final _dbService = DoctorDatabaseService();
+  StreamSubscription<Uri>? _linkSub;
+  bool _isHandlingLink = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initDeepLinks();
+  }
+
+  Future<void> _initDeepLinks() async {
+    try {
+      final initial = await _appLinks.getInitialLink();
+      if (initial != null) {
+        _handleIncomingLink(initial);
+      }
+    } catch (e) {
+      _showSnack('تعذر قراءة الرابط عند فتح التطبيق.');
+    }
+
+    _linkSub = _appLinks.uriLinkStream.listen(
+      _handleIncomingLink,
+      onError: (_) => _showSnack('تعذر قراءة الرابط. حاول مرة أخرى.'),
+    );
+  }
+
+  void _handleIncomingLink(Uri uri) {
+    final doctorId = _extractDoctorId(uri);
+    if (doctorId == null) return;
+    _openDoctorProfile(doctorId);
+  }
+
+  String? _extractDoctorId(Uri uri) {
+    if (uri.scheme != 'fayoumdoctors') return null;
+
+    if (uri.host == 'doctor') {
+      if (uri.pathSegments.isNotEmpty) {
+        return uri.pathSegments.first.trim();
+      }
+      final fromQuery = uri.queryParameters['id'];
+      return fromQuery?.trim().isNotEmpty == true ? fromQuery : null;
+    }
+
+    if (uri.pathSegments.isNotEmpty && uri.pathSegments.first == 'doctor') {
+      if (uri.pathSegments.length > 1) {
+        return uri.pathSegments[1].trim();
+      }
+      final fromQuery = uri.queryParameters['id'];
+      return fromQuery?.trim().isNotEmpty == true ? fromQuery : null;
+    }
+
+    return null;
+  }
+
+  Future<void> _openDoctorProfile(String doctorId) async {
+    if (_isHandlingLink) return;
+    _isHandlingLink = true;
+
+    try {
+      final doctor = await _dbService.getDoctorById(doctorId: doctorId);
+      if (doctor == null) {
+        _showSnack('لم يتم العثور على الطبيب المطلوب.');
+        return;
+      }
+
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final nav = _navigatorKey.currentState;
+        if (nav == null) return;
+        nav.push(
+          MaterialPageRoute(
+            builder: (context) => DoctorDetailScreen(
+              doctor: doctor,
+              cardColor: AppColors.primary,
+            ),
+          ),
+        );
+      });
+    } catch (_) {
+      _showSnack('تعذر فتح صفحة الطبيب.');
+    } finally {
+      _isHandlingLink = false;
+    }
+  }
+
+  void _showSnack(String message) {
+    _scaffoldMessengerKey.currentState?.showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  @override
+  void dispose() {
+    _linkSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +154,8 @@ class FayoumDoctorsApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: AppColors.background,
       ),
+      navigatorKey: _navigatorKey,
+      scaffoldMessengerKey: _scaffoldMessengerKey,
       locale: const Locale('ar'),
       supportedLocales: const [Locale('ar')],
       localizationsDelegates: const [
