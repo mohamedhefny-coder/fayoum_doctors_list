@@ -407,7 +407,7 @@ class _SearchOverlayScreenState extends State<SearchOverlayScreen>
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: _specialties.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
         itemBuilder: (ctx, i) {
           final (name, color) = _specialties[i];
           final selected = _selectedSpecialty == name;

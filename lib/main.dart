@@ -899,8 +899,8 @@ class _ModernSearchBar extends StatelessWidget {
         opaque: false,
         barrierDismissible: true,
         transitionDuration: const Duration(milliseconds: 300),
-        pageBuilder: (_, __, ___) => const SearchOverlayScreen(),
-        transitionsBuilder: (_, anim, __, child) {
+        pageBuilder: (_, _, _) => const SearchOverlayScreen(),
+        transitionsBuilder: (_, anim, _, child) {
           return FadeTransition(opacity: anim, child: child);
         },
       ),
