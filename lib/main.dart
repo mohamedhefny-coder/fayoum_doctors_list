@@ -19,6 +19,8 @@ import 'screens/contact_us_screen.dart';
 import 'screens/private_hospitals_screen.dart';
 import 'screens/government_hospitals_screen.dart';
 import 'screens/labs_screen.dart';
+import 'screens/radiology_screen.dart';
+import 'screens/medical_centers_screen.dart';
 import 'screens/pharmacies_screen.dart';
 import 'supabase_config.dart';
 import 'services/doctor_database_service.dart';
@@ -26,6 +28,7 @@ import 'services/notification_service.dart';
 import 'services/doctor_realtime_notifications_service.dart';
 import 'models/doctor_model.dart';
 import 'screens/doctor_messages_screen.dart';
+import 'widgets/doctor_summary_card.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -1070,6 +1073,22 @@ class _QuickCategoryCard extends StatelessWidget {
         return;
       }
 
+      if (category.label == 'مراكز أشعة') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const RadiologyScreen()),
+        );
+        return;
+      }
+
+      if (category.label == 'مراكز طبية') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MedicalCentersScreen()),
+        );
+        return;
+      }
+
       if (category.label == 'صيدليات') {
         Navigator.push(
           context,
@@ -1722,240 +1741,225 @@ class AllSpecialtiesPage extends StatelessWidget {
 }
 
 // ====== الأطباء الموصى بهم ======
-class _RecommendedDoctors extends StatelessWidget {
+class _RecommendedDoctors extends StatefulWidget {
   const _RecommendedDoctors();
 
-  static final doctors = [
-    _Doctor(
-      name: 'د. أحمد السيد',
-      specialty: 'استشاري قلب وأوعية دموية',
-      rating: 4.9,
-      reviews: 256,
-      price: '250',
-      experience: '18 سنة',
-      available: true,
-      color: Color(0xFFFF5722),
-    ),
-    _Doctor(
-      name: 'د. مريم حسن',
-      specialty: 'استشارية نساء وتوليد',
-      rating: 4.8,
-      reviews: 198,
-      price: '200',
-      experience: '15 سنة',
-      available: true,
-      color: Color(0xFFE91E63),
-    ),
-    _Doctor(
-      name: 'د. كريم فؤاد',
-      specialty: 'استشاري جراحة عظام',
-      rating: 4.7,
-      reviews: 312,
-      price: '300',
-      experience: '20 سنة',
-      available: false,
-      color: Color(0xFF00BCD4),
-    ),
-  ];
+  @override
+  State<_RecommendedDoctors> createState() => _RecommendedDoctorsState();
+}
+
+class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
+  final _dbService = DoctorDatabaseService();
+  final PageController _controller = PageController(viewportFraction: 0.92);
+  final List<Doctor> _doctors = <Doctor>[];
+  final List<_RotationItem> _rotation = <_RotationItem>[];
+  Timer? _autoTimer;
+  Timer? _reloadDebounce;
+  RealtimeChannel? _channel;
+  bool _isLoading = true;
+  String? _error;
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: doctors.map((doctor) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: _DoctorCard(doctor: doctor),
-        );
-      }).toList(),
-    );
+  void initState() {
+    super.initState();
+    _loadDoctors();
+    _subscribeRealtime();
   }
-}
 
-class _Doctor {
-  final String name;
-  final String specialty;
-  final double rating;
-  final int reviews;
-  final String price;
-  final String experience;
-  final bool available;
-  final Color color;
+  @override
+  void dispose() {
+    _autoTimer?.cancel();
+    _reloadDebounce?.cancel();
+    _channel?.unsubscribe();
+    _controller.dispose();
+    super.dispose();
+  }
 
-  const _Doctor({
-    required this.name,
-    required this.specialty,
-    required this.rating,
-    required this.reviews,
-    required this.price,
-    required this.experience,
-    required this.available,
-    required this.color,
-  });
-}
+  void _subscribeRealtime() {
+    final channel = Supabase.instance.client.channel('recommended_doctors');
+    channel
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'doctors',
+          callback: (_) => _scheduleReload(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'doctors',
+          callback: (_) => _scheduleReload(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.delete,
+          schema: 'public',
+          table: 'doctors',
+          callback: (_) => _scheduleReload(),
+        )
+        .subscribe();
 
-class _DoctorCard extends StatelessWidget {
-  const _DoctorCard({required this.doctor});
+    _channel = channel;
+  }
 
-  final _Doctor doctor;
+  void _scheduleReload() {
+    if (!mounted) return;
+    _reloadDebounce?.cancel();
+    _reloadDebounce = Timer(const Duration(milliseconds: 500), () {
+      if (!mounted) return;
+      _loadDoctors();
+    });
+  }
+
+  Future<void> _loadDoctors() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+
+    try {
+      final doctors = await _dbService.getRecommendedDoctors();
+      if (!mounted) return;
+      _doctors
+        ..clear()
+        ..addAll(doctors);
+      _buildRotation();
+      _isLoading = false;
+      _startAutoScroll();
+      setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _buildRotation() {
+    _rotation.clear();
+    for (final doctor in _doctors) {
+      final weight = _normalizeWeight(doctor.recommendedWeight);
+      final duration = _normalizeDuration(doctor.recommendedDurationSeconds);
+      for (var i = 0; i < weight; i++) {
+        _rotation.add(_RotationItem(doctor, duration));
+      }
+    }
+  }
+
+  int _normalizeWeight(int raw) {
+    if (raw <= 0) return 1;
+    if (raw > 10) return 10;
+    return raw;
+  }
+
+  int _normalizeDuration(int raw) {
+    if (raw < 2) return 2;
+    if (raw > 12) return 12;
+    return raw;
+  }
+
+  void _startAutoScroll() {
+    _autoTimer?.cancel();
+    if (_rotation.length < 2) return;
+    _scheduleNextAdvance();
+  }
+
+  void _scheduleNextAdvance() {
+    _autoTimer?.cancel();
+    if (!_controller.hasClients || _rotation.isEmpty) return;
+    final current = _controller.page?.round() ?? _controller.initialPage;
+    final currentItem = _rotation[current % _rotation.length];
+    _autoTimer = Timer(Duration(seconds: currentItem.durationSeconds), () {
+      if (!_controller.hasClients || _rotation.isEmpty) return;
+      final next = (current + 1) % _rotation.length;
+      _controller
+          .animateToPage(
+            next,
+            duration: const Duration(milliseconds: 450),
+            curve: Curves.easeInOut,
+          )
+          .whenComplete(_scheduleNextAdvance);
+    });
+  }
+
+  Color _colorForDoctor(Doctor doctor, int index) {
+    const palette = [
+      AppColors.primary,
+      AppColors.secondary,
+      AppColors.pink,
+      AppColors.purple,
+      AppColors.success,
+    ];
+    final hash = doctor.id.hashCode;
+    final slot = (hash.abs() + index) % palette.length;
+    return palette[slot];
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Colors.white, doctor.color.withValues(alpha: 0.05)],
+    if (_isLoading) {
+      return const SizedBox(
+        height: 180,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (_error != null) {
+      return SizedBox(
+        height: 140,
+        child: Center(
+          child: Text('تعذر تحميل الأطباء: $_error'),
         ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.08),
-            blurRadius: 15,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 90,
-            height: 90,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [doctor.color.withValues(alpha: 0.8), doctor.color],
-              ),
-              borderRadius: BorderRadius.circular(20),
-              boxShadow: [
-                BoxShadow(
-                  color: doctor.color.withValues(alpha: 0.4),
-                  blurRadius: 12,
-                  offset: const Offset(0, 6),
-                ),
-              ],
-            ),
-            child: const Icon(Icons.person, color: Colors.white, size: 45),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        doctor.name,
-                        style: const TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
+      );
+    }
+
+    if (_rotation.isEmpty) {
+      return const SizedBox(
+        height: 120,
+        child: Center(child: Text('لا يوجد أطباء حالياً.')),
+      );
+    }
+
+    return SizedBox(
+      height: 190,
+      child: PageView.builder(
+        controller: _controller,
+        onPageChanged: (_) => _scheduleNextAdvance(),
+        itemCount: _rotation.length,
+        itemBuilder: (context, index) {
+          final item = _rotation[index];
+          final doctor = item.doctor;
+          final color = _colorForDoctor(doctor, index);
+
+          return Padding(
+            padding: const EdgeInsets.only(left: 6, right: 6),
+            child: DoctorSummaryCard(
+              doctor: doctor,
+              cardColor: color,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => DoctorDetailScreen(
+                      doctor: doctor,
+                      cardColor: color,
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: doctor.available
-                            ? AppColors.success.withValues(alpha: 0.15)
-                            : Colors.grey.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            doctor.available
-                                ? Icons.check_circle
-                                : Icons.schedule,
-                            size: 12,
-                            color: doctor.available
-                                ? AppColors.success
-                                : Colors.grey,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            doctor.available ? 'متاح' : 'مشغول',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: doctor.available
-                                  ? AppColors.success
-                                  : Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  doctor.specialty,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
                   ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.star, color: Colors.amber, size: 14),
-                          const SizedBox(width: 4),
-                          Text(
-                            '${doctor.rating}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      '(${doctor.reviews})',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.textSecondary,
-                      ),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '${doctor.price} جنيه',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.bold,
-                        color: doctor.color,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                );
+              },
             ),
-          ),
-        ],
+          );
+        },
       ),
     );
   }
+}
+
+class _RotationItem {
+  final Doctor doctor;
+  final int durationSeconds;
+
+  const _RotationItem(this.doctor, this.durationSeconds);
 }
 
 // ====== الخدمات الإضافية ======

@@ -903,6 +903,23 @@ class DoctorDatabaseService {
     }
   }
 
+  // الحصول على الأطباء الموصى بهم فقط
+  Future<List<Doctor>> getRecommendedDoctors() async {
+    try {
+      final response = await _client
+          .from('doctors')
+          .select()
+          .eq('is_published', true)
+          .eq('is_recommended', true);
+
+      return (response as List)
+          .map((json) => Doctor.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   // البحث عن أطباء حسب التخصص
   Future<List<Doctor>> getDoctorsBySpecialization(String specialization) async {
     try {

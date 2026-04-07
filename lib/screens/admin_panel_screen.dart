@@ -22,7 +22,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   List<Map<String, dynamic>> _doctors = [];
   bool _isLoading = true;
   String _searchQuery = '';
-  String _statusFilter = 'all'; // all, published, publish_requested, delete_requested, not_published
+  String _statusFilter =
+      'all'; // all, published, publish_requested, delete_requested, not_published
 
   Future<void> _handlePreviewDoctor(String doctorId, Color cardColor) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -102,18 +103,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   Future<void> _handleAddPharmacy() async {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('إضافة صيدلية: سيتم تنفيذها لاحقاً'),
-      ),
+      const SnackBar(content: Text('إضافة صيدلية: سيتم تنفيذها لاحقاً')),
     );
   }
 
   Future<void> _handleAddHospital() async {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('إضافة مستشفى: سيتم تنفيذها لاحقاً'),
-      ),
+      const SnackBar(content: Text('إضافة مستشفى: سيتم تنفيذها لاحقاً')),
     );
   }
 
@@ -417,6 +414,259 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
+  Future<void> _showRecommendedSettingsDialog(
+    BuildContext context,
+    Map<String, dynamic> doctor,
+  ) async {
+    bool isRecommended = doctor['is_recommended'] == true;
+    int weight = doctor['recommended_weight'] ?? 1;
+    int durationSeconds = doctor['recommended_duration_seconds'] ?? 3;
+
+    final messenger = ScaffoldMessenger.of(context);
+
+    final result = await showDialog<Map<String, dynamic>?>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.star, color: Colors.purple),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'إعدادات العرض الموصى به\n${doctor['full_name'] ?? ''}',
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Toggle switch
+                  SwitchListTile(
+                    title: const Text(
+                      'عرض في الأطباء الموصى بهم',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    subtitle: const Text(
+                      'تفعيل ظهور هذا الطبيب في شريط الأطباء الموصى بهم',
+                    ),
+                    value: isRecommended,
+                    activeTrackColor: Colors.purple,
+                    onChanged: (value) {
+                      setState(() => isRecommended = value);
+                    },
+                  ),
+                  const Divider(height: 32),
+                  // Weight slider
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'وزن العرض (التكرار)',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.purple.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '$weight',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.purple.shade700,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'كلما زاد الوزن، زادت عدد مرات ظهور الطبيب في الشريط',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      Slider(
+                        value: weight.toDouble(),
+                        min: 1,
+                        max: 10,
+                        divisions: 9,
+                        label: weight.toString(),
+                        activeColor: Colors.purple,
+                        onChanged: (value) {
+                          setState(() => weight = value.toInt());
+                        },
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'قليل (1)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          Text(
+                            'عادي (5)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          Text(
+                            'كثير (10)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const Divider(height: 32),
+                  // Duration slider
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text(
+                            'مدة العرض',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '$durationSeconds ث',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade700,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'المدة الزمنية لعرض بطاقة الطبيب قبل الانتقال للتالي',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      Slider(
+                        value: durationSeconds.toDouble(),
+                        min: 2,
+                        max: 12,
+                        divisions: 10,
+                        label: '$durationSeconds ثانية',
+                        activeColor: Colors.blue,
+                        onChanged: (value) {
+                          setState(() => durationSeconds = value.toInt());
+                        },
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'سريع (2ث)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          Text(
+                            'متوسط (7ث)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                          Text(
+                            'بطيء (12ث)',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('إلغاء'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.of(context).pop({
+                  'isRecommended': isRecommended,
+                  'weight': weight,
+                  'durationSeconds': durationSeconds,
+                }),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purple,
+                  foregroundColor: Colors.white,
+                ),
+                child: const Text('حفظ'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (result != null && mounted) {
+      try {
+        await _adminService.updateRecommendedSettings(
+          doctorId: doctor['id'],
+          isRecommended: result['isRecommended']!,
+          weight: result['weight']!,
+          durationSeconds: result['durationSeconds']!,
+        );
+
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('تم تحديث إعدادات العرض الموصى به بنجاح'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadDoctors();
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('خطأ في التحديث: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _handleApproveDeleteRequest(
     String doctorId,
     String doctorName,
@@ -540,12 +790,15 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   @override
   Widget build(BuildContext context) {
     final totalDoctors = _doctors.length;
-    final publishedCount =
-        _doctors.where((d) => d['is_published'] == true).length;
-    final publishRequestedCount =
-        _doctors.where((d) => d['publish_requested'] == true).length;
-    final deleteRequestedCount =
-        _doctors.where((d) => d['delete_requested'] == true).length;
+    final publishedCount = _doctors
+        .where((d) => d['is_published'] == true)
+        .length;
+    final publishRequestedCount = _doctors
+        .where((d) => d['publish_requested'] == true)
+        .length;
+    final deleteRequestedCount = _doctors
+        .where((d) => d['delete_requested'] == true)
+        .length;
 
     final filteredDoctors = _doctors.where((doctor) {
       final query = _searchQuery.trim().toLowerCase();
@@ -571,8 +824,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           matchesFilter = deleteRequested;
           break;
         case 'not_published':
-          matchesFilter =
-              !isPublished && !publishRequested && !deleteRequested;
+          matchesFilter = !isPublished && !publishRequested && !deleteRequested;
           break;
         case 'all':
         default:
@@ -795,8 +1047,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               const SizedBox(width: 8),
                               _FilterChip(
                                 label: 'طلب حذف',
-                                isSelected:
-                                    _statusFilter == 'delete_requested',
+                                isSelected: _statusFilter == 'delete_requested',
                                 onTap: () {
                                   setState(
                                     () => _statusFilter = 'delete_requested',
@@ -806,8 +1057,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               const SizedBox(width: 8),
                               _FilterChip(
                                 label: 'غير منشور',
-                                isSelected:
-                                    _statusFilter == 'not_published',
+                                isSelected: _statusFilter == 'not_published',
                                 onTap: () {
                                   setState(
                                     () => _statusFilter = 'not_published',
@@ -959,6 +1209,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                           doctor['id'],
                                           doctor['full_name'] ?? '',
                                         );
+                                      } else if (value ==
+                                          'recommended_settings') {
+                                        _showRecommendedSettingsDialog(
+                                          context,
+                                          doctor,
+                                        );
                                       } else if (value == 'send_message') {
                                         _showSendMessageDialog(
                                           context,
@@ -1031,6 +1287,20 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                               ),
                                               SizedBox(width: 8),
                                               Text('قبول طلب النشر'),
+                                            ],
+                                          ),
+                                        ),
+                                      if (!deleteRequested && isPublished)
+                                        const PopupMenuItem(
+                                          value: 'recommended_settings',
+                                          child: Row(
+                                            children: [
+                                              Icon(
+                                                Icons.star_border,
+                                                color: Colors.purple,
+                                              ),
+                                              SizedBox(width: 8),
+                                              Text('إعدادات العرض الموصى به'),
                                             ],
                                           ),
                                         ),
@@ -1115,10 +1385,7 @@ class _StatusPill extends StatelessWidget {
           Container(
             width: 6,
             height: 6,
-            decoration: BoxDecoration(
-              color: color,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
           ),
           const SizedBox(width: 6),
           Text(
@@ -1176,11 +1443,7 @@ class _FilterChip extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (isSelected) ...[
-              const Icon(
-                Icons.check,
-                size: 16,
-                color: Color(0xFF2196F3),
-              ),
+              const Icon(Icons.check, size: 16, color: Color(0xFF2196F3)),
               const SizedBox(width: 4),
             ],
             Text(

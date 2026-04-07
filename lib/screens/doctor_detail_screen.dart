@@ -53,6 +53,8 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
       showDragHandle: true,
       backgroundColor: Colors.white,
       builder: (context) {
+        final width = MediaQuery.of(context).size.width;
+        final qrSize = (width * 0.7).clamp(240.0, 320.0);
         return Directionality(
           textDirection: TextDirection.rtl,
           child: Padding(
@@ -66,7 +68,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                 ),
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF8FAFC),
                     borderRadius: BorderRadius.circular(16),
@@ -75,7 +77,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                     key: _qrKey,
                     child: QrImageView(
                       data: link,
-                      size: 200,
+                      size: qrSize,
                       backgroundColor: Colors.white,
                     ),
                   ),
@@ -107,7 +109,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                         text: 'كود QR لصفحة الطبيب',
                       );
                     },
-                    icon: const Icon(Icons.qr_code_2),
+                    icon: const Icon(Icons.qr_code_2, size: 28),
                     label: const Text('مشاركة كود QR'),
                   ),
                 ),
@@ -430,7 +432,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
               actions: [
                 IconButton(
                   tooltip: 'مشاركة',
-                  icon: const Icon(Icons.qr_code_2),
+                  icon: const Icon(Icons.qr_code_2, size: 28),
                   onPressed: _showShareSheet,
                 ),
               ],

@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:developer' as developer;
 import 'dart:io';
 import '../models/doctor_model.dart';
@@ -31,6 +33,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   bool _isUploadingIntroVideo = false;
   bool _dataWasUpdated = false;
   bool _isCheckingVisibility = false;
+  RealtimeChannel? _profileChannel;
+  Timer? _profileRefreshDebounce;
 
   late TextEditingController _fullNameController;
   late TextEditingController _titleController;
@@ -64,6 +68,37 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   List<String> _galleryImageUrls = <String>[];
   List<File> _newGalleryImages = <File>[];
   final ImagePicker _picker = ImagePicker();
+
+  String _safeExtensionFromName(String name) {
+    final trimmed = name.trim();
+    final dot = trimmed.lastIndexOf('.');
+    if (dot <= 0 || dot == trimmed.length - 1) return 'bin';
+    final ext = trimmed.substring(dot + 1).toLowerCase();
+    final ok = RegExp(r'^[a-z0-9]{1,8}$').hasMatch(ext);
+    return ok ? ext : 'bin';
+  }
+
+  Future<File?> _xFileToLocalTempFile(
+    XFile xfile, {
+    required String prefix,
+  }) async {
+    final rawPath = xfile.path.trim();
+    if (rawPath.isNotEmpty) {
+      final f = File(rawPath);
+      if (await f.exists()) return f;
+    }
+
+    final bytes = await xfile.readAsBytes();
+    if (bytes.isEmpty) return null;
+
+    final ext = _safeExtensionFromName(xfile.name);
+    final tmpDir = Directory.systemTemp;
+    final tmpPath =
+        '${tmpDir.path}/${prefix}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+    final out = File(tmpPath);
+    await out.writeAsBytes(bytes, flush: true);
+    return out;
+  }
 
   static const int _maxIntroVideoBytes = 30 * 1024 * 1024; // 30MB
 
@@ -103,7 +138,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       final xfile = await _picker.pickVideo(source: ImageSource.gallery);
       if (xfile == null) return;
 
-      final file = File(xfile.path);
+      final file =
+          await _xFileToLocalTempFile(xfile, prefix: 'intro_video_${doctor.id}');
+      if (file == null) return;
       final lower = xfile.name.toLowerCase();
       final allowed =
           lower.endsWith('.mp4') ||
@@ -121,8 +158,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         return;
       }
 
-      final bytes = await file.length();
-      if (bytes > _maxIntroVideoBytes) {
+      final length = await file.length();
+      if (length > _maxIntroVideoBytes) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('حجم الفيديو يجب ألا يزيد عن 30 ميجا.')),
@@ -261,6 +298,40 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     super.initState();
     _doctorFuture = _dbService.ensureCurrentDoctorProfile();
     _initializeControllers();
+    _subscribeProfileUpdates();
+  }
+
+  void _subscribeProfileUpdates() {
+    final user = Supabase.instance.client.auth.currentUser;
+    final doctorId = user?.id ?? '';
+    if (doctorId.isEmpty) return;
+
+    final channel = Supabase.instance.client.channel('doctor_profile_$doctorId');
+    channel
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'doctors',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: doctorId,
+          ),
+          callback: (_) => _scheduleProfileRefresh(),
+        )
+        .subscribe();
+
+    _profileChannel = channel;
+  }
+
+  void _scheduleProfileRefresh() {
+    if (!mounted || _isEditing) return;
+    _profileRefreshDebounce?.cancel();
+    _profileRefreshDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (!mounted || _isEditing) return;
+      _doctorFuture = _dbService.ensureCurrentDoctorProfile();
+      _loadDoctorData();
+    });
   }
 
   void _initializeControllers() {
@@ -432,19 +503,12 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
       // بعض أجهزة أندرويد (خاصة مع Photo Picker) قد تُرجع content://
       // أو مساراً غير موجود؛ ننسخ الملف إلى مسار مؤقت قبل تمريره للقص.
-      String sourcePath = xfile.path.trim();
-      if (sourcePath.isEmpty) return;
-
-      File sourceFile = File(sourcePath);
-      if (!await sourceFile.exists()) {
-        final bytes = await xfile.readAsBytes();
-        final tmpDir = Directory.systemTemp;
-        final tmpPath =
-            '${tmpDir.path}/profile_${DateTime.now().millisecondsSinceEpoch}.jpg';
-        sourceFile = File(tmpPath);
-        await sourceFile.writeAsBytes(bytes, flush: true);
-        sourcePath = sourceFile.path;
-      }
+      final sourceFile = await _xFileToLocalTempFile(
+        xfile,
+        prefix: 'profile_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      if (sourceFile == null) return;
+      final sourcePath = sourceFile.path;
 
       final cropped = await ImageCropper().cropImage(
         sourcePath: sourcePath,
@@ -1156,6 +1220,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
   @override
   void dispose() {
+    _profileRefreshDebounce?.cancel();
+    _profileChannel?.unsubscribe();
     _fullNameController.dispose();
     _titleController.dispose();
     _phoneController.dispose();
@@ -1185,8 +1251,19 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
     if (images.isEmpty) return;
 
+    final files = await Future.wait(
+      images.map(
+        (x) => _xFileToLocalTempFile(
+          x,
+          prefix: 'gallery_${DateTime.now().millisecondsSinceEpoch}',
+        ),
+      ),
+    );
+    final pickedFiles = files.whereType<File>().toList();
+    if (pickedFiles.isEmpty) return;
+    if (!mounted) return;
     setState(() {
-      _newGalleryImages.addAll(images.map((x) => File(x.path)));
+      _newGalleryImages.addAll(pickedFiles);
     });
   }
 

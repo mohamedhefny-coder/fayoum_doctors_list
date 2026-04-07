@@ -163,6 +163,21 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen> {
     );
     if (picked == null) return;
 
+    File receiptFile = File(picked.path);
+    if (!await receiptFile.exists()) {
+      final bytes = await picked.readAsBytes();
+      if (bytes.isEmpty) return;
+      final dot = picked.name.lastIndexOf('.');
+      final ext =
+          (dot > 0 && dot < picked.name.length - 1)
+              ? picked.name.substring(dot + 1).toLowerCase()
+              : 'jpg';
+      final tmpPath =
+          '${Directory.systemTemp.path}/receipt_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      receiptFile = File(tmpPath);
+      await receiptFile.writeAsBytes(bytes, flush: true);
+    }
+
     if (!mounted) return;
     final messenger = ScaffoldMessenger.of(context);
 
@@ -172,7 +187,7 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen> {
     });
 
     try {
-      final url = await _db.uploadPaymentReceipt(imageFile: File(picked.path));
+      final url = await _db.uploadPaymentReceipt(imageFile: receiptFile);
       await _db.updateAppointmentPaymentReceiptUrl(
         appointmentId: apptId,
         paymentReceiptUrl: url,

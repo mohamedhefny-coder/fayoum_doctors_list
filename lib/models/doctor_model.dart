@@ -36,6 +36,9 @@ class Doctor {
   final String? paymentAccount;
   final bool deleteRequested;
   final DateTime? deleteRequestedAt;
+  final bool isRecommended;
+  final int recommendedWeight;
+  final int recommendedDurationSeconds;
 
   Doctor({
     required this.id,
@@ -75,6 +78,9 @@ class Doctor {
     this.paymentAccount,
     this.deleteRequested = false,
     this.deleteRequestedAt,
+    this.isRecommended = false,
+    this.recommendedWeight = 1,
+    this.recommendedDurationSeconds = 3,
   });
 
   factory Doctor.fromJson(Map<String, dynamic> json) {
@@ -135,6 +141,15 @@ class Doctor {
       return fallback;
     }
 
+    int readInt(String key, {int fallback = 0}) {
+      final value = json[key];
+      if (value == null) return fallback;
+      if (value is int) return value;
+      if (value is num) return value.round();
+      final s = value.toString().trim();
+      return int.tryParse(s) ?? fallback;
+    }
+
     return Doctor(
       id: readString('id'),
       email: readString('email'),
@@ -179,6 +194,12 @@ class Doctor {
       paymentAccount: readOptionalString('payment_account'),
       deleteRequested: readBool('delete_requested', fallback: false),
       deleteRequestedAt: readOptionalDate('delete_requested_at'),
+      isRecommended: readBool('is_recommended', fallback: false),
+      recommendedWeight: readInt('recommended_weight', fallback: 1),
+      recommendedDurationSeconds: readInt(
+        'recommended_duration_seconds',
+        fallback: 3,
+      ),
     );
   }
 
@@ -220,5 +241,8 @@ class Doctor {
     'payment_account': paymentAccount,
     'delete_requested': deleteRequested,
     'delete_requested_at': deleteRequestedAt?.toIso8601String(),
+    'is_recommended': isRecommended,
+    'recommended_weight': recommendedWeight,
+    'recommended_duration_seconds': recommendedDurationSeconds,
   };
 }

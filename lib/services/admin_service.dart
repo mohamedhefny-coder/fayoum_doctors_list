@@ -337,12 +337,33 @@ class AdminService {
       final response = await _supabase
           .from('doctors')
           .select(
-            'id,full_name,email,phone,specialization,is_published,publish_requested,delete_requested,delete_requested_at,created_at',
+            'id,full_name,email,phone,specialization,is_published,publish_requested,delete_requested,delete_requested_at,created_at,is_recommended,recommended_weight,recommended_duration_seconds',
           )
           .order('created_at', ascending: false);
       return List<Map<String, dynamic>>.from(response);
     } catch (e) {
       throw Exception('فشل تحميل قائمة الأطباء: ${e.toString()}');
+    }
+  }
+
+  Future<void> updateRecommendedSettings({
+    required String doctorId,
+    required bool isRecommended,
+    required int weight,
+    required int durationSeconds,
+  }) async {
+    try {
+      await _supabase
+          .from('doctors')
+          .update({
+            'is_recommended': isRecommended,
+            'recommended_weight': weight,
+            'recommended_duration_seconds': durationSeconds,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', doctorId);
+    } catch (e) {
+      throw Exception('فشل تحديث إعدادات الأطباء الموصى بهم: ${e.toString()}');
     }
   }
 
