@@ -1,5 +1,10 @@
+import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/radiology_service.dart';
+import 'radiology_login_screen.dart';
 
 class RadiologyScreen extends StatefulWidget {
   const RadiologyScreen({super.key});
@@ -129,13 +134,24 @@ class _RadiologyScreenState extends State<RadiologyScreen>
                           size: 22,
                         ),
                       ),
-                      onPressed: () {
-                        Navigator.push(
+                      onPressed: () async {
+                        // فتح صفحة الدخول أولاً
+                        final loginSuccess = await Navigator.push<bool>(
                           context,
                           MaterialPageRoute(
-                            builder: (_) => const _AddRadiologyCenterScreen(),
+                            builder: (_) => const RadiologyLoginScreen(),
                           ),
                         );
+                        if (loginSuccess == true && context.mounted) {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const AddRadiologyCenterScreen(),
+                            ),
+                          );
+                          // تسجيل خروج بعد الانتهاء
+                          await RadiologyService().signOut();
+                        }
                       },
                     ),
                   ),
@@ -1008,6 +1024,93 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 24),
 
+                    // ── Booking button (prominent) ──
+                    Container(
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF6A1B9A),
+                            const Color(0xFF9C27B0),
+                            const Color(0xFFAB47BC),
+                          ],
+                          begin: Alignment.centerRight,
+                          end: Alignment.centerLeft,
+                        ),
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF9C27B0).withValues(alpha: 0.45),
+                            blurRadius: 20,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        borderRadius: BorderRadius.circular(18),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(18),
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  _RadiologyBookingScreen(center: center),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 18),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white.withValues(alpha: 0.2),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.calendar_month_rounded,
+                                    color: Colors.white,
+                                    size: 24,
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                const Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'احجز الآن',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.bold,
+                                        letterSpacing: 0.5,
+                                      ),
+                                    ),
+                                    Text(
+                                      'احجز موعدك بسهولة',
+                                      style: TextStyle(
+                                        color: Colors.white70,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(width: 16),
+                                const Icon(
+                                  Icons.arrow_back_ios_new_rounded,
+                                  color: Colors.white70,
+                                  size: 18,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
                     // ── Call button ──
                     SizedBox(
                       width: double.infinity,
@@ -1040,6 +1143,721 @@ class _RadiologyDetailsScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ====== صفحة حجز خدمة مركز الأشعة ======
+class _RadiologyBookingScreen extends StatefulWidget {
+  const _RadiologyBookingScreen({required this.center});
+  final _RadiologyCenter center;
+
+  @override
+  State<_RadiologyBookingScreen> createState() =>
+      _RadiologyBookingScreenState();
+}
+
+class _RadiologyBookingScreenState extends State<_RadiologyBookingScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _notesController = TextEditingController();
+
+  String? _selectedService;
+  DateTime? _selectedDate;
+  String? _selectedTimeSlot;
+  bool _isSubmitting = false;
+
+  static const _timeSlots = [
+    '8:00 ص',
+    '9:00 ص',
+    '10:00 ص',
+    '11:00 ص',
+    '12:00 م',
+    '1:00 م',
+    '2:00 م',
+    '3:00 م',
+    '4:00 م',
+    '5:00 م',
+    '6:00 م',
+    '7:00 م',
+  ];
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: now.add(const Duration(days: 1)),
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 60)),
+      locale: const Locale('ar'),
+      builder: (context, child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            colorScheme: ColorScheme.light(
+              primary: widget.center.color,
+              onPrimary: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+    }
+  }
+
+  void _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedService == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى اختيار الخدمة المطلوبة'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    if (_selectedDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى اختيار تاريخ الموعد'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+    if (_selectedTimeSlot == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى اختيار الوقت المناسب'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    // محاكاة إرسال الحجز
+    await Future.delayed(const Duration(seconds: 1));
+    if (!mounted) return;
+    setState(() => _isSubmitting = false);
+
+    await showDialog(
+      context: context,
+      builder: (_) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.check_circle_rounded,
+                  color: Colors.green,
+                  size: 60,
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'تم إرسال طلب الحجز',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'سيتواصل معك فريق ${widget.center.name} لتأكيد الموعد',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[600], fontSize: 13),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context); // close dialog
+                  Navigator.pop(context); // back to details
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: widget.center.color,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 12,
+                  ),
+                ),
+                child: const Text('حسناً'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.center.color;
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF8F5FF),
+        appBar: AppBar(
+          title: const Text(
+            'حجز موعد',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          backgroundColor: const Color(0xFF9C27B0),
+          iconTheme: const IconThemeData(color: Colors.white),
+          elevation: 0,
+          flexibleSpace: Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF6A1B9A), Color(0xFF9C27B0)],
+                begin: Alignment.centerRight,
+                end: Alignment.centerLeft,
+              ),
+            ),
+          ),
+        ),
+        body: Form(
+          key: _formKey,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              // ── بطاقة المركز ──
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      color.withValues(alpha: 0.12),
+                      color.withValues(alpha: 0.04),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: color.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      child: Icon(widget.center.icon, color: color, size: 28),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.center.name,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                              color: color,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.center.address,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            widget.center.workingHours,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: color,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // ── بيانات المريض ──
+              _BookingSection(
+                title: 'بيانات المريض',
+                icon: Icons.person_outline_rounded,
+                color: color,
+                children: [
+                  _bookingField(
+                    controller: _nameController,
+                    label: 'الاسم الكامل',
+                    hint: 'مثال: محمد أحمد علي',
+                    icon: Icons.person_rounded,
+                    color: color,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'يرجى إدخال الاسم'
+                        : null,
+                  ),
+                  const SizedBox(height: 14),
+                  _bookingField(
+                    controller: _phoneController,
+                    label: 'رقم الهاتف',
+                    hint: '010xxxxxxxx',
+                    icon: Icons.phone_rounded,
+                    color: color,
+                    keyboardType: TextInputType.phone,
+                    validator: (v) {
+                      if (v == null || v.trim().isEmpty) {
+                        return 'يرجى إدخال رقم الهاتف';
+                      }
+                      if (!RegExp(r'^[0-9+\-\s]{7,15}$').hasMatch(v.trim())) {
+                        return 'رقم هاتف غير صحيح';
+                      }
+                      return null;
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // ── اختيار الخدمة ──
+              _BookingSection(
+                title: 'الخدمة المطلوبة',
+                icon: Icons.medical_services_rounded,
+                color: color,
+                children: [
+                  const Text(
+                    'اختر نوع الفحص أو الخدمة',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: widget.center.services.map((service) {
+                      final isSelected = _selectedService == service;
+                      return GestureDetector(
+                        onTap: () =>
+                            setState(() => _selectedService = service),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? color
+                                : color.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(22),
+                            border: Border.all(
+                              color: isSelected
+                                  ? color
+                                  : color.withValues(alpha: 0.3),
+                              width: 1.5,
+                            ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: color.withValues(alpha: 0.35),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 4),
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                isSelected
+                                    ? Icons.check_circle_rounded
+                                    : Icons.radio_button_unchecked_rounded,
+                                size: 16,
+                                color:
+                                    isSelected ? Colors.white : color,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                service,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : color,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // ── تاريخ الموعد ──
+              _BookingSection(
+                title: 'تاريخ الموعد',
+                icon: Icons.calendar_month_rounded,
+                color: color,
+                children: [
+                  GestureDetector(
+                    onTap: _pickDate,
+                    child: Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _selectedDate != null
+                              ? color
+                              : color.withValues(alpha: 0.3),
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(
+                              Icons.calendar_today_rounded,
+                              color: color,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              _selectedDate == null
+                                  ? 'اضغط لاختيار التاريخ'
+                                  : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: _selectedDate != null
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                                color: _selectedDate != null
+                                    ? color
+                                    : Colors.grey[500],
+                              ),
+                            ),
+                          ),
+                          Icon(
+                            Icons.arrow_drop_down_rounded,
+                            color: color,
+                            size: 28,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // ── الوقت المناسب ──
+              _BookingSection(
+                title: 'الوقت المناسب',
+                icon: Icons.access_time_rounded,
+                color: color,
+                children: [
+                  const Text(
+                    'اختر الوقت الذي يناسبك',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _timeSlots.map((slot) {
+                      final isSelected = _selectedTimeSlot == slot;
+                      return GestureDetector(
+                        onTap: () =>
+                            setState(() => _selectedTimeSlot = slot),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 180),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 9,
+                          ),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? color
+                                : Colors.white,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isSelected
+                                  ? color
+                                  : Colors.grey.shade300,
+                              width: 1.5,
+                            ),
+                            boxShadow: isSelected
+                                ? [
+                                    BoxShadow(
+                                      color: color.withValues(alpha: 0.35),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 3),
+                                    ),
+                                  ]
+                                : [],
+                          ),
+                          child: Text(
+                            slot,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: isSelected ? Colors.white : Colors.grey[700],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // ── ملاحظات إضافية ──
+              _BookingSection(
+                title: 'ملاحظات إضافية',
+                icon: Icons.notes_rounded,
+                color: color,
+                children: [
+                  _bookingField(
+                    controller: _notesController,
+                    label: 'ملاحظات (اختياري)',
+                    hint: 'مثال: أحتاج نتيجة سريعة، أو لدي حالة خاصة...',
+                    icon: Icons.edit_note_rounded,
+                    color: color,
+                    maxLines: 3,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
+
+              // ── زر التأكيد ──
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      const Color(0xFF6A1B9A),
+                      color,
+                    ],
+                    begin: Alignment.centerRight,
+                    end: Alignment.centerLeft,
+                  ),
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.4),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Material(
+                  color: Colors.transparent,
+                  borderRadius: BorderRadius.circular(16),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: _isSubmitting ? null : _submit,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      child: Center(
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                width: 26,
+                                height: 26,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.check_circle_rounded,
+                                    color: Colors.white,
+                                    size: 22,
+                                  ),
+                                  SizedBox(width: 10),
+                                  Text(
+                                    'تأكيد الحجز',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _bookingField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    required Color color,
+    int maxLines = 1,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+  }) {
+    return TextFormField(
+      controller: controller,
+      maxLines: maxLines,
+      keyboardType: keyboardType,
+      validator: validator,
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        prefixIcon: Container(
+          margin: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        filled: true,
+        fillColor: Colors.white,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: color, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Colors.red),
+        ),
+      ),
+    );
+  }
+}
+
+class _BookingSection extends StatelessWidget {
+  const _BookingSection({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.children,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color color;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  color.withValues(alpha: 0.18),
+                  color.withValues(alpha: 0.05),
+                ],
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(icon, color: color, size: 20),
+                const SizedBox(width: 10),
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    color: color,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1209,16 +2027,29 @@ class _DetailRow extends StatelessWidget {
 }
 
 // ====== صفحة إضافة مركز أشعة ======
-class _AddRadiologyCenterScreen extends StatefulWidget {
-  const _AddRadiologyCenterScreen();
+// ====== نموذج بيانات طبيب في مركز الأشعة ======
+class _DoctorEntry {
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController titleController = TextEditingController();
+  XFile? photo;
+
+  void dispose() {
+    nameController.dispose();
+    titleController.dispose();
+  }
+}
+
+// ====== صفحة إضافة مركز أشعة ======
+class AddRadiologyCenterScreen extends StatefulWidget {
+  const AddRadiologyCenterScreen();
 
   @override
-  State<_AddRadiologyCenterScreen> createState() =>
+  State<AddRadiologyCenterScreen> createState() =>
       _AddRadiologyCenterScreenState();
 }
 
 class _AddRadiologyCenterScreenState
-    extends State<_AddRadiologyCenterScreen> {
+    extends State<AddRadiologyCenterScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
@@ -1233,6 +2064,27 @@ class _AddRadiologyCenterScreenState
   final _contractsController = TextEditingController();
 
   bool _hasBooking = false;
+  bool _isSubmitting = false;
+  final _radiologyService = RadiologyService();  final List<_DoctorEntry> _doctors = [];
+
+  void _addDoctor() {
+    setState(() => _doctors.add(_DoctorEntry()));
+  }
+
+  void _removeDoctor(int index) {
+    _doctors[index].dispose();
+    setState(() => _doctors.removeAt(index));
+  }
+
+  Future<void> _pickDoctorImage(int index) async {
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked != null) {
+      setState(() => _doctors[index].photo = picked);
+    }
+  }
 
   static const _availableServices = [
     'أشعة عادية (X-Ray)',
@@ -1249,6 +2101,41 @@ class _AddRadiologyCenterScreenState
 
   bool _isOpen24Hours = false;
 
+  XFile? _coverImage;
+  final List<XFile> _galleryImages = [];
+  final _imagePicker = ImagePicker();
+
+  Future<void> _pickCoverImage() async {
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+    );
+    if (picked != null) {
+      setState(() => _coverImage = picked);
+    }
+  }
+
+  Future<void> _pickGalleryImages() async {
+    final picked = await _imagePicker.pickMultiImage(imageQuality: 80);
+    if (picked.isNotEmpty) {
+      setState(() {
+        final remaining = 10 - _galleryImages.length;
+        _galleryImages.addAll(picked.take(remaining));
+      });
+    }
+  }
+
+  void _removeGalleryImage(int index) {
+    setState(() => _galleryImages.removeAt(index));
+  }
+
+  Widget _buildImagePreview(XFile file) {
+    if (kIsWeb) {
+      return Image.network(file.path, fit: BoxFit.cover);
+    }
+    return Image.file(File(file.path), fit: BoxFit.cover);
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -1261,10 +2148,13 @@ class _AddRadiologyCenterScreenState
     _featuresController.dispose();
     _discountsController.dispose();
     _contractsController.dispose();
+    for (final d in _doctors) {
+      d.dispose();
+    }
     super.dispose();
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedServices.isEmpty) {
@@ -1277,14 +2167,72 @@ class _AddRadiologyCenterScreenState
       return;
     }
 
-    // هنا يمكن إرسال البيانات إلى قاعدة البيانات
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('تم إرسال البيانات بنجاح وسيتم مراجعتها'),
-        backgroundColor: Color(0xFF9C27B0),
-      ),
-    );
-    Navigator.pop(context);
+    setState(() => _isSubmitting = true);
+    try {
+      final doctorsList = _doctors
+          .where((d) => d.nameController.text.trim().isNotEmpty)
+          .map((d) => {
+                'name': d.nameController.text.trim(),
+                'title': d.titleController.text.trim(),
+              })
+          .toList();
+
+      await _radiologyService.upsertCenterData(
+        name: _nameController.text.trim(),
+        address: _addressController.text.trim().isNotEmpty
+            ? _addressController.text.trim()
+            : null,
+        phone: _phoneController.text.trim().isNotEmpty
+            ? _phoneController.text.trim()
+            : null,
+        whatsapp: _whatsappController.text.trim().isNotEmpty
+            ? _whatsappController.text.trim()
+            : null,
+        facebook: _facebookController.text.trim().isNotEmpty
+            ? _facebookController.text.trim()
+            : null,
+        locationUrl: _locationController.text.trim().isNotEmpty
+            ? _locationController.text.trim()
+            : null,
+        workingHours: _workingHoursController.text.trim().isNotEmpty
+            ? _workingHoursController.text.trim()
+            : null,
+        isOpen24Hours: _isOpen24Hours,
+        services: _selectedServices.toList(),
+        features: _featuresController.text.trim().isNotEmpty
+            ? _featuresController.text.trim()
+            : null,
+        discounts: _discountsController.text.trim().isNotEmpty
+            ? _discountsController.text.trim()
+            : null,
+        contracts: _contractsController.text.trim().isNotEmpty
+            ? _contractsController.text.trim()
+            : null,
+        hasBooking: _hasBooking,
+        doctors: doctorsList.isNotEmpty ? doctorsList : null,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم حفظ بيانات المركز بنجاح'),
+            backgroundColor: Color(0xFF9C27B0),
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('خطأ في الحفظ: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 
   @override
@@ -1346,6 +2294,264 @@ class _AddRadiologyCenterScreenState
                       return null;
                     },
                   ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // --- بطاقة صورة الغلاف ---
+              _SectionCard(
+                title: 'صورة الغلاف',
+                icon: Icons.photo_camera,
+                children: [
+                  const Text(
+                    'اختر صورة رئيسية تمثل المركز',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    onTap: _pickCoverImage,
+                    child: Container(
+                      height: 180,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF9C27B0).withValues(alpha: 0.06),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: const Color(0xFF9C27B0).withValues(alpha: 0.4),
+                          width: 1.5,
+                          strokeAlign: BorderSide.strokeAlignInside,
+                        ),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: _coverImage == null
+                          ? Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF9C27B0).withValues(alpha: 0.12),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.add_photo_alternate_outlined,
+                                    size: 36,
+                                    color: Color(0xFF9C27B0),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                const Text(
+                                  'اضغط لاختيار صورة الغلاف',
+                                  style: TextStyle(
+                                    color: Color(0xFF9C27B0),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'JPG, PNG - الحجم الأقصى 5 ميجا',
+                                  style: TextStyle(color: Colors.grey, fontSize: 12),
+                                ),
+                              ],
+                            )
+                          : Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                _buildImagePreview(_coverImage!),
+                                Positioned(
+                                  top: 8,
+                                  left: 8,
+                                  child: GestureDetector(
+                                    onTap: () => setState(() => _coverImage = null),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 8,
+                                  right: 8,
+                                  child: GestureDetector(
+                                    onTap: _pickCoverImage,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(alpha: 0.6),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(Icons.edit, color: Colors.white, size: 14),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'تغيير',
+                                            style: TextStyle(color: Colors.white, fontSize: 12),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
+              // --- بطاقة معرض الصور ---
+              _SectionCard(
+                title: 'معرض الصور',
+                icon: Icons.photo_library,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'أضف صور إضافية للمركز (حتى 10 صور)',
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
+                      Text(
+                        '${_galleryImages.length}/10',
+                        style: const TextStyle(
+                          color: Color(0xFF9C27B0),
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 110,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        if (_galleryImages.length < 10)
+                          GestureDetector(
+                            onTap: _pickGalleryImages,
+                            child: Container(
+                              width: 100,
+                              margin: const EdgeInsets.only(left: 10),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF9C27B0).withValues(alpha: 0.06),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFF9C27B0).withValues(alpha: 0.4),
+                                  width: 1.5,
+                                ),
+                              ),
+                              child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.add_photo_alternate_outlined,
+                                    color: Color(0xFF9C27B0),
+                                    size: 28,
+                                  ),
+                                  SizedBox(height: 6),
+                                  Text(
+                                    'إضافة\nصور',
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: Color(0xFF9C27B0),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ...List.generate(_galleryImages.length, (i) {
+                          return Container(
+                            width: 100,
+                            height: 110,
+                            margin: const EdgeInsets.only(left: 10),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.grey.shade300,
+                                width: 1,
+                              ),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                _buildImagePreview(_galleryImages[i]),
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: GestureDetector(
+                                    onTap: () => _removeGalleryImage(i),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(3),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 14,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 4,
+                                  left: 4,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.55),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      '${i + 1}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                  if (_galleryImages.isEmpty) ...[
+                    const SizedBox(height: 8),
+                    const Center(
+                      child: Text(
+                        'لم يتم إضافة صور بعد',
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 16),
@@ -1503,6 +2709,242 @@ class _AddRadiologyCenterScreenState
               ),
               const SizedBox(height: 16),
 
+              // --- بطاقة الأطباء ---
+              _SectionCard(
+                title: 'أطباء المركز',
+                icon: Icons.people_alt_outlined,
+                children: [
+                  const Text(
+                    'أضف أطباء المركز مع بياناتهم (اختياري)',
+                    style: TextStyle(color: Colors.grey, fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._doctors.asMap().entries.map((entry) {
+                    final i = entry.key;
+                    final doc = entry.value;
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 14),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3E5F5),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: const Color(0xFF9C27B0).withValues(alpha: 0.25),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Text(
+                                'طبيب ${i + 1}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF9C27B0),
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const Spacer(),
+                              GestureDetector(
+                                onTap: () => _removeDoctor(i),
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.red.shade200),
+                                  ),
+                                  child: Icon(
+                                    Icons.close_rounded,
+                                    size: 16,
+                                    color: Colors.red.shade400,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              // صورة الطبيب
+                              GestureDetector(
+                                onTap: () => _pickDoctorImage(i),
+                                child: Container(
+                                  width: 80,
+                                  height: 80,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF9C27B0).withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: const Color(0xFF9C27B0).withValues(alpha: 0.35),
+                                      width: 1.5,
+                                    ),
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: doc.photo == null
+                                      ? const Column(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.add_a_photo_outlined,
+                                              color: Color(0xFF9C27B0),
+                                              size: 26,
+                                            ),
+                                            SizedBox(height: 4),
+                                            Text(
+                                              'صورة',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Color(0xFF9C27B0),
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            _buildImagePreview(doc.photo!),
+                                            Positioned(
+                                              bottom: 2,
+                                              right: 2,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(3),
+                                                decoration: const BoxDecoration(
+                                                  color: Color(0xFF9C27B0),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(
+                                                  Icons.edit,
+                                                  color: Colors.white,
+                                                  size: 11,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    TextFormField(
+                                      controller: doc.nameController,
+                                      decoration: InputDecoration(
+                                        labelText: 'اسم الطبيب',
+                                        hintText: 'مثال: أحمد محمد',
+                                        prefixIcon: Container(
+                                          margin: const EdgeInsets.all(8),
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF9C27B0).withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(
+                                            Icons.person_rounded,
+                                            color: Color(0xFF9C27B0),
+                                            size: 18,
+                                          ),
+                                        ),
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 10,
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                          borderSide: const BorderSide(
+                                            color: Color(0xFF9C27B0),
+                                            width: 2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    TextFormField(
+                                      controller: doc.titleController,
+                                      decoration: InputDecoration(
+                                        labelText: 'اللقب / التخصص',
+                                        hintText: 'مثال: دكتوراه في الأشعة',
+                                        prefixIcon: Container(
+                                          margin: const EdgeInsets.all(8),
+                                          padding: const EdgeInsets.all(6),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF9C27B0).withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(8),
+                                          ),
+                                          child: const Icon(
+                                            Icons.workspace_premium_rounded,
+                                            color: Color(0xFF9C27B0),
+                                            size: 18,
+                                          ),
+                                        ),
+                                        contentPadding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 10,
+                                        ),
+                                        filled: true,
+                                        fillColor: Colors.white,
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(10),
+                                          borderSide: const BorderSide(
+                                            color: Color(0xFF9C27B0),
+                                            width: 2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 4),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _addDoctor,
+                      icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+                      label: const Text('إضافة طبيب'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF9C27B0),
+                        side: const BorderSide(
+                          color: Color(0xFF9C27B0),
+                          width: 1.5,
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+
               // --- بطاقة الحجز ---
               _SectionCard(
                 title: 'حجز الخدمة',
@@ -1527,11 +2969,21 @@ class _AddRadiologyCenterScreenState
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _submit,
-                  icon: const Icon(Icons.send),
-                  label: const Text(
-                    'إرسال البيانات',
-                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  onPressed: _isSubmitting ? null : _submit,
+                  icon: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.send),
+                  label: Text(
+                    _isSubmitting ? 'جارٍ الحفظ...' : 'حفظ البيانات',
+                    style: const TextStyle(
+                        fontSize: 17, fontWeight: FontWeight.bold),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF9C27B0),

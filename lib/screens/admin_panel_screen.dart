@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import '../services/admin_service.dart';
 import '../services/admin_realtime_notifications_service.dart';
 import '../services/lab_service.dart';
+import '../services/radiology_service.dart';
 import 'admin_add_doctor_screen.dart';
 import 'lab_register_screen.dart';
 import 'add_lab_screen.dart';
+import 'radiology_screen.dart';
+import 'radiology_register_screen.dart';
 import '../models/doctor_model.dart';
 import 'doctor_detail_screen.dart';
 import 'admin_replies_screen.dart';
@@ -112,6 +115,67 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('إضافة مستشفى: سيتم تنفيذها لاحقاً')),
     );
+  }
+
+  Future<void> _handleAddRadiology() async {
+    debugPrint('👨‍💼 Admin: Opening radiology center registration...');
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(
+        builder: (context) => const RadiologyRegisterScreen(),
+      ),
+    );
+
+    if (result is Map<String, dynamic> && result['success'] == true) {
+      if (!mounted) return;
+
+      try {
+        // تسجيل خروج المدير مؤقتاً
+        await _adminService.signOut();
+
+        // تسجيل دخول مركز الأشعة
+        await RadiologyService().loginCenter(
+          email: result['email'],
+          password: result['password'],
+        );
+
+        if (!mounted) return;
+
+        // فتح صفحة إضافة بيانات المركز
+        final centerDataResult = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (context) => const AddRadiologyCenterScreen(),
+          ),
+        );
+
+        // تسجيل خروج مركز الأشعة
+        await RadiologyService().signOut();
+
+        if (!mounted) return;
+
+        if (centerDataResult == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'تم إضافة مركز الأشعة بنجاح. الرجاء تسجيل الدخول مرة أخرى',
+              ),
+            ),
+          );
+        }
+
+        // العودة إلى صفحة تسجيل الدخول
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      } catch (e) {
+        debugPrint('👨‍💼 Admin: Error during radiology center flow: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('خطأ: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _handleAddLab() async {
@@ -860,6 +924,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   case 'add_hospital':
                     _handleAddHospital();
                     break;
+                  case 'add_radiology':
+                    _handleAddRadiology();
+                    break;
                 }
               },
               itemBuilder: (context) => const [
@@ -900,6 +967,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       Icon(Icons.local_hospital, color: Color(0xFFFF5722)),
                       SizedBox(width: 8),
                       Text('إضافة مستشفى'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'add_radiology',
+                  child: Row(
+                    children: [
+                      Icon(Icons.medical_information, color: Color(0xFF9C27B0)),
+                      SizedBox(width: 8),
+                      Text('إضافة مركز أشعة'),
                     ],
                   ),
                 ),

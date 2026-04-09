@@ -166,7 +166,7 @@ class LabService {
       } else {
         // إضافة بيانات جديدة
         debugPrint('📝 Inserting new lab...');
-        labData['is_published'] = false;
+        labData['is_published'] = true;
         await _supabase.from('labs').insert(labData);
         debugPrint('✅ Lab inserted successfully!');
       }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/lab_model.dart';
+import '../services/lab_service.dart';
 import 'lab_details_screen.dart';
 import 'add_lab_screen.dart';
 import 'lab_login_screen.dart';
@@ -25,8 +26,11 @@ class _LabsScreenState extends State<LabsScreen>
   ];
 
   final Set<String> _selectedServices = <String>{};
+  final _labService = LabService();
+  List<_LabData> _remoteLabs = [];
+  bool _isLoadingRemote = true;
 
-  late final List<_LabData> _allLabs = <_LabData>[
+  late final List<_LabData> _staticLabs = <_LabData>[
     _LabData(
       model: const LabModel(
         id: 'fayoum',
@@ -63,6 +67,13 @@ class _LabsScreenState extends State<LabsScreen>
     ),
   ];
 
+  List<_LabData> get _allLabs {
+    // دمج المعامل المحلية مع المعامل من قاعدة البيانات
+    final remoteIds = _remoteLabs.map((l) => l.model.id).toSet();
+    final local = _staticLabs.where((l) => !remoteIds.contains(l.model.id)).toList();
+    return [..._remoteLabs, ...local];
+  }
+
   @override
   void initState() {
     super.initState();
@@ -70,6 +81,29 @@ class _LabsScreenState extends State<LabsScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..forward();
+    _loadRemoteLabs();
+  }
+
+  Future<void> _loadRemoteLabs() async {
+    if (!mounted) return;
+    setState(() => _isLoadingRemote = true);
+    try {
+      final labs = await _labService.getPublishedLabs();
+      if (!mounted) return;
+      setState(() {
+        _remoteLabs = labs
+            .map((m) => _LabData(
+                  model: m,
+                  icon: Icons.biotech,
+                  color: const Color(0xFF9C27B0),
+                ))
+            .toList();
+      });
+    } catch (_) {
+      // في حالة الخطأ، نستمر بالبيانات المحلية
+    } finally {
+      if (mounted) setState(() => _isLoadingRemote = false);
+    }
   }
 
   @override
@@ -79,9 +113,10 @@ class _LabsScreenState extends State<LabsScreen>
   }
 
   List<_LabData> get _filtered {
-    if (_selectedServices.isEmpty) return _allLabs;
+    final allLabs = _allLabs;
+    if (_selectedServices.isEmpty) return allLabs;
 
-    return _allLabs.where((lab) {
+    return allLabs.where((lab) {
       return _selectedServices.every(
         (s) => lab.model.features.any((feat) => feat.contains(s)),
       );
@@ -109,16 +144,9 @@ class _LabsScreenState extends State<LabsScreen>
         MaterialPageRoute(builder: (context) => const AddLabScreen()),
       );
 
-      if (result != null && mounted) {
-        setState(() {
-          _allLabs.add(
-            _LabData(
-              model: result,
-              icon: Icons.biotech,
-              color: const Color(0xFF9C27B0),
-            ),
-          );
-        });
+      if (result == true && mounted) {
+        // إعادة تحميل المعامل من قاعدة البيانات بعد الإضافة
+        await _loadRemoteLabs();
         if (mounted) {
           ScaffoldMessenger.of(
             context,
@@ -157,9 +185,11 @@ class _LabsScreenState extends State<LabsScreen>
                 _buildFilterChips(),
                 const SizedBox(height: 8),
                 Expanded(
-                  child: labs.isEmpty
-                      ? _buildEmptyState()
-                      : _buildLabsList(labs),
+                  child: _isLoadingRemote && _remoteLabs.isEmpty
+                      ? const Center(child: CircularProgressIndicator())
+                      : labs.isEmpty
+                          ? _buildEmptyState()
+                          : _buildLabsList(labs),
                 ),
               ],
             ),

@@ -2243,6 +2243,44 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
       );
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWebWide = kIsWeb && screenWidth > 900;
+
+    // على الويب: شبكة 3 بطاقات بدلاً من الكاروسيل
+    if (isWebWide) {
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 2.3,
+        ),
+        itemCount: _doctors.length,
+        itemBuilder: (context, index) {
+          final doctor = _doctors[index];
+          final color = _colorForDoctor(doctor, index);
+          return DoctorSummaryCard(
+            doctor: doctor,
+            cardColor: color,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => DoctorDetailScreen(
+                    doctor: doctor,
+                    cardColor: color,
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      );
+    }
+
+    // على الموبايل: الكاروسيل الأصلي
     return SizedBox(
       height: 190,
       child: PageView.builder(
