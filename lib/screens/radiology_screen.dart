@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../deep_link_config.dart';
 import '../services/radiology_service.dart';
 import 'radiology_login_screen.dart';
 
@@ -1099,8 +1101,9 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                           // آخر عنصر في RTL = أقصى اليسار
                           GestureDetector(
                             onTap: () {
-                              final qrData =
-                                  'fayoumdoctors://radiology?name=${Uri.encodeComponent(center.name)}';
+                              final qrData = buildPublicRadiologyUrl(
+                                centerName: center.name,
+                              ).toString();
                               showDialog(
                                 context: context,
                                 builder: (_) =>
@@ -1117,8 +1120,9 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                                 ),
                               ),
                               child: QrImageView(
-                                data:
-                                    'fayoumdoctors://radiology?name=${Uri.encodeComponent(center.name)}',
+                                data: buildPublicRadiologyUrl(
+                                  centerName: center.name,
+                                ).toString(),
                                 version: QrVersions.auto,
                                 size: 52,
                                 backgroundColor: Colors.white,

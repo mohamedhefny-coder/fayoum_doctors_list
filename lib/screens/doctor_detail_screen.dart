@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../deep_link_config.dart';
 import '../models/doctor_model.dart';
 import '../models/doctor_working_hours.dart';
 import '../services/doctor_database_service.dart';
@@ -30,7 +31,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
   final GlobalKey _qrKey = GlobalKey();
 
   String _doctorShareLink() {
-    return 'fayoumdoctors://doctor/${widget.doctor.id}';
+    return buildPublicDoctorUrl(doctorId: widget.doctor.id).toString();
   }
 
   Future<Uint8List?> _captureQrPng() async {

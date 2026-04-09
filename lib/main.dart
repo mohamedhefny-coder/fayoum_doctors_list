@@ -52,11 +52,33 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
   final _dbService = DoctorDatabaseService();
   StreamSubscription<Uri>? _linkSub;
   bool _isHandlingLink = false;
+  bool _didHandleWebQueryLink = false;
 
   @override
   void initState() {
     super.initState();
     _initDeepLinks();
+    _handleInitialWebQueryLink();
+  }
+
+  void _handleInitialWebQueryLink() {
+    if (!kIsWeb) return;
+    if (_didHandleWebQueryLink) return;
+    _didHandleWebQueryLink = true;
+
+    final uri = Uri.base;
+
+    final doctorId = uri.queryParameters['doctor']?.trim();
+    if (doctorId != null && doctorId.isNotEmpty) {
+      _openDoctorProfile(doctorId);
+      return;
+    }
+
+    final radiologyName = uri.queryParameters['radiology']?.trim();
+    if (radiologyName != null && radiologyName.isNotEmpty) {
+      _openRadiologyCenterByName(radiologyName);
+      return;
+    }
   }
 
   Future<void> _initDeepLinks() async {
@@ -76,6 +98,9 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
   }
 
   void _handleIncomingLink(Uri uri) {
+    if (kDebugMode) {
+      debugPrint('Incoming link: $uri');
+    }
     final doctorId = _extractDoctorId(uri);
     if (doctorId != null) {
       _openDoctorProfile(doctorId);

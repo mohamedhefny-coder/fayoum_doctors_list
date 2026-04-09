@@ -23,10 +23,15 @@ class AdminPanelScreen extends StatefulWidget {
 class _AdminPanelScreenState extends State<AdminPanelScreen> {
   final _adminService = AdminService();
   List<Map<String, dynamic>> _doctors = [];
+  List<Map<String, dynamic>> _radiologyCenters = [];
   bool _isLoading = true;
+  bool _isLoadingRadiology = true;
   String _searchQuery = '';
   String _statusFilter =
       'all'; // all, published, publish_requested, delete_requested, not_published
+
+  String _radiologySearchQuery = '';
+  String _radiologyStatusFilter = 'all'; // all, published, not_published
 
   Future<void> _handlePreviewDoctor(String doctorId, Color cardColor) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -63,6 +68,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   void initState() {
     super.initState();
     _loadDoctors();
+    _loadRadiologyCenters();
     AdminRealtimeNotificationsService.startForCurrentAdmin();
   }
 
@@ -84,6 +90,155 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         ).showSnackBar(SnackBar(content: Text('خطأ في تحميل البيانات: $e')));
       }
     }
+  }
+
+  Future<void> _loadRadiologyCenters() async {
+    if (!mounted) return;
+    setState(() => _isLoadingRadiology = true);
+    try {
+      final centers = await _adminService.getAllRadiologyCenters();
+      if (!mounted) return;
+      setState(() {
+        _radiologyCenters = centers;
+        _isLoadingRadiology = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingRadiology = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ في تحميل مراكز الأشعة: $e')),
+      );
+    }
+  }
+
+  Future<void> _handleDeleteRadiologyCenter(
+    String centerId,
+    String centerName,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('تأكيد الحذف'),
+          content: Text('هل أنت متأكد من حذف مركز الأشعة "$centerName"؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('حذف'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _adminService.deleteRadiologyCenter(centerId);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم حذف مركز الأشعة بنجاح')),
+        );
+        _loadRadiologyCenters();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في الحذف: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleToggleRadiologyPublished(
+    Map<String, dynamic> center,
+  ) async {
+    final current = center['is_published'] == true;
+    final name = (center['name'] ?? '').toString();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Text(current ? 'إلغاء النشر' : 'نشر المركز'),
+          content: Text(
+            current
+                ? 'هل تريد إلغاء نشر "$name"؟'
+                : 'هل تريد نشر "$name" ليظهر للمستخدمين؟',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(current ? 'إلغاء النشر' : 'نشر'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _adminService.updateRadiologyCenterSettings(
+          centerId: center['id'],
+          isPublished: !current,
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(!current ? 'تم نشر المركز' : 'تم إلغاء نشر المركز'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadRadiologyCenters();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleToggleRadiologyBooking(
+    Map<String, dynamic> center,
+  ) async {
+    final current = center['has_booking'] == true;
+    try {
+      await _adminService.updateRadiologyCenterSettings(
+        centerId: center['id'],
+        hasBooking: !current,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(!current ? 'تم تفعيل الحجز' : 'تم إيقاف الحجز'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _loadRadiologyCenters();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  void _handlePreviewRadiologyCenter(Map<String, dynamic> center) {
+    final name = (center['name'] ?? '').toString();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => RadiologyScreen(initialCenterName: name),
+      ),
+    );
   }
 
   Future<void> _handleLogout() async {
@@ -898,14 +1053,43 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       return matchesSearch && matchesFilter;
     }).toList();
 
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: const Color(0xFFF1F5F9),
-        appBar: AppBar(
+    final totalCenters = _radiologyCenters.length;
+    final publishedCenters = _radiologyCenters
+        .where((c) => c['is_published'] == true)
+        .length;
+
+    final filteredCenters = _radiologyCenters.where((center) {
+      final query = _radiologySearchQuery.trim().toLowerCase();
+      final name = (center['name'] ?? '').toString().toLowerCase();
+      final phone = (center['phone'] ?? '').toString().toLowerCase();
+
+      final matchesSearch =
+          query.isEmpty || name.contains(query) || phone.contains(query);
+
+      final isPublished = center['is_published'] == true;
+      final matchesFilter = _radiologyStatusFilter == 'all'
+          ? true
+          : (_radiologyStatusFilter == 'published' ? isPublished : !isPublished);
+
+      return matchesSearch && matchesFilter;
+    }).toList();
+
+    return DefaultTabController(
+      length: 2,
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFF1F5F9),
+          appBar: AppBar(
           title: const Text('لوحة تحكم المدير'),
           backgroundColor: const Color(0xFF2196F3),
           foregroundColor: Colors.white,
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'الأطباء'),
+              Tab(text: 'مراكز أشعة'),
+            ],
+          ),
           actions: [
             PopupMenuButton<String>(
               icon: const Icon(Icons.add),
@@ -984,7 +1168,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             ),
             IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: _loadDoctors,
+              onPressed: () {
+                _loadDoctors();
+                _loadRadiologyCenters();
+              },
               tooltip: 'تحديث',
             ),
             IconButton(
@@ -1005,433 +1192,623 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             ),
           ],
         ),
-        body: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
-                children: [
-                  // نظرة عامة سريعة وإحصائيات + بحث وفلاتر
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+          body: TabBarView(
+            children: [
+              // ====== Doctors tab (existing UI) ======
+              _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
                       children: [
-                        Container(
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(16),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(alpha: 0.05),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'إجمالي الأطباء',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: Color(0xFF666666),
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                '$totalDoctors',
-                                style: const TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF2196F3),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 4,
-                                children: [
-                                  _StatusPill(
-                                    label: 'منشور',
-                                    color: Colors.green,
-                                    count: publishedCount,
-                                  ),
-                                  _StatusPill(
-                                    label: 'طلب نشر',
-                                    color: Colors.orange,
-                                    count: publishRequestedCount,
-                                  ),
-                                  _StatusPill(
-                                    label: 'طلب حذف',
-                                    color: Colors.red,
-                                    count: deleteRequestedCount,
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          decoration: InputDecoration(
-                            hintText: 'بحث باسم الطبيب أو البريد الإلكتروني...',
-                            prefixIcon: const Icon(Icons.search),
-                            filled: true,
-                            fillColor: Colors.white,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                          onChanged: (value) {
-                            setState(() {
-                              _searchQuery = value;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        SingleChildScrollView(
-                          scrollDirection: Axis.horizontal,
-                          child: Row(
-                            children: [
-                              _FilterChip(
-                                label: 'الكل',
-                                isSelected: _statusFilter == 'all',
-                                onTap: () {
-                                  setState(() => _statusFilter = 'all');
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'منشور',
-                                isSelected: _statusFilter == 'published',
-                                onTap: () {
-                                  setState(() => _statusFilter = 'published');
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'طلب نشر',
-                                isSelected:
-                                    _statusFilter == 'publish_requested',
-                                onTap: () {
-                                  setState(
-                                    () => _statusFilter = 'publish_requested',
-                                  );
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'طلب حذف',
-                                isSelected: _statusFilter == 'delete_requested',
-                                onTap: () {
-                                  setState(
-                                    () => _statusFilter = 'delete_requested',
-                                  );
-                                },
-                              ),
-                              const SizedBox(width: 8),
-                              _FilterChip(
-                                label: 'غير منشور',
-                                isSelected: _statusFilter == 'not_published',
-                                onTap: () {
-                                  setState(
-                                    () => _statusFilter = 'not_published',
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  // قائمة الأطباء
-                  Expanded(
-                    child: filteredDoctors.isEmpty
-                        ? const Center(
-                            child: Text(
-                              'لا توجد نتائج مطابقة',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Color(0xFF666666),
-                              ),
-                            ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: filteredDoctors.length,
-                            itemBuilder: (context, index) {
-                              final doctor = filteredDoctors[index];
-                              final publishRequested =
-                                  doctor['publish_requested'] == true;
-                              final isPublished =
-                                  doctor['is_published'] == true;
-                              final deleteRequested =
-                                  doctor['delete_requested'] == true;
-
-                              // Debug: طباعة القيم للتحقق
-                              if (kDebugMode &&
-                                  doctor['delete_requested'] != null) {
-                                debugPrint(
-                                  'DEBUG: Doctor ${doctor['full_name']} - delete_requested: ${doctor['delete_requested']}',
-                                );
-                              }
-
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                shape: RoundedRectangleBorder(
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
                                   borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
                                 ),
-                                elevation: 2,
-                                child: ListTile(
-                                  contentPadding: const EdgeInsets.all(16),
-                                  leading: CircleAvatar(
-                                    radius: 30,
-                                    backgroundColor: const Color(0xFF2196F3),
-                                    child: Text(
-                                      doctor['full_name']?.toString().substring(
-                                            0,
-                                            1,
-                                          ) ??
-                                          '؟',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'إجمالي الأطباء',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Color(0xFF666666),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$totalDoctors',
                                       style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 24,
+                                        fontSize: 32,
                                         fontWeight: FontWeight.bold,
+                                        color: Color(0xFF2196F3),
                                       ),
                                     ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      children: [
+                                        _StatusPill(
+                                          label: 'منشور',
+                                          color: Colors.green,
+                                          count: publishedCount,
+                                        ),
+                                        _StatusPill(
+                                          label: 'طلب نشر',
+                                          color: Colors.orange,
+                                          count: publishRequestedCount,
+                                        ),
+                                        _StatusPill(
+                                          label: 'طلب حذف',
+                                          color: Colors.red,
+                                          count: deleteRequestedCount,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                decoration: InputDecoration(
+                                  hintText: 'بحث باسم الطبيب أو البريد الإلكتروني...',
+                                  prefixIcon: const Icon(Icons.search),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
                                   ),
-                                  title: Text(
-                                    doctor['full_name'] ?? 'غير محدد',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
+                                ),
+                                onChanged: (value) {
+                                  setState(() {
+                                    _searchQuery = value;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: [
+                                    _FilterChip(
+                                      label: 'الكل',
+                                      isSelected: _statusFilter == 'all',
+                                      onTap: () {
+                                        setState(() => _statusFilter = 'all');
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _FilterChip(
+                                      label: 'منشور',
+                                      isSelected: _statusFilter == 'published',
+                                      onTap: () {
+                                        setState(() => _statusFilter = 'published');
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _FilterChip(
+                                      label: 'طلب نشر',
+                                      isSelected: _statusFilter == 'publish_requested',
+                                      onTap: () {
+                                        setState(() => _statusFilter = 'publish_requested');
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _FilterChip(
+                                      label: 'طلب حذف',
+                                      isSelected: _statusFilter == 'delete_requested',
+                                      onTap: () {
+                                        setState(() => _statusFilter = 'delete_requested');
+                                      },
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _FilterChip(
+                                      label: 'غير منشور',
+                                      isSelected: _statusFilter == 'not_published',
+                                      onTap: () {
+                                        setState(() => _statusFilter = 'not_published');
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: filteredDoctors.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'لا توجد نتائج مطابقة',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: Color(0xFF666666),
                                     ),
                                   ),
-                                  subtitle: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        doctor['specialization'] ?? 'غير محدد',
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  itemCount: filteredDoctors.length,
+                                  itemBuilder: (context, index) {
+                                    final doctor = filteredDoctors[index];
+                                    final publishRequested = doctor['publish_requested'] == true;
+                                    final isPublished = doctor['is_published'] == true;
+                                    final deleteRequested = doctor['delete_requested'] == true;
+
+                                    if (kDebugMode && doctor['delete_requested'] != null) {
+                                      debugPrint(
+                                        'DEBUG: Doctor ${doctor['full_name']} - delete_requested: ${doctor['delete_requested']}',
+                                      );
+                                    }
+
+                                    return Card(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
                                       ),
-                                      if (deleteRequested)
-                                        const Text(
-                                          '⚠️ طلب حذف الحساب',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.red,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        )
-                                      else if (publishRequested)
-                                        const Text(
-                                          'الحالة: طلب نشر',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.orange,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        )
-                                      else if (isPublished)
-                                        const Text(
-                                          'الحالة: منشور',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.green,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        )
-                                      else
-                                        const Text(
-                                          'الحالة: غير منشور',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey,
-                                            fontWeight: FontWeight.bold,
+                                      elevation: 2,
+                                      child: ListTile(
+                                        contentPadding: const EdgeInsets.all(16),
+                                        leading: CircleAvatar(
+                                          radius: 30,
+                                          backgroundColor: const Color(0xFF2196F3),
+                                          child: Text(
+                                            doctor['full_name']?.toString().substring(0, 1) ?? '؟',
+                                            style: const TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 24,
+                                              fontWeight: FontWeight.bold,
+                                            ),
                                           ),
                                         ),
-                                      Text(
-                                        doctor['email'] ?? '',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                      Text(
-                                        'رقم الهاتف: ${doctor['phone'] ?? ''}',
-                                        style: const TextStyle(fontSize: 12),
-                                      ),
-                                    ],
-                                  ),
-                                  trailing: PopupMenuButton<String>(
-                                    onSelected: (value) {
-                                      if (value == 'preview_profile') {
-                                        _handlePreviewDoctor(
-                                          doctor['id'],
-                                          const Color(0xFF246BCE),
-                                        );
-                                      } else if (value == 'approve_delete') {
-                                        _handleApproveDeleteRequest(
-                                          doctor['id'],
-                                          doctor['full_name'] ?? '',
-                                        );
-                                      } else if (value == 'reject_delete') {
-                                        _handleRejectDeleteRequest(
-                                          doctor['id'],
-                                          doctor['full_name'] ?? '',
-                                        );
-                                      } else if (value == 'approve_publish') {
-                                        _handleApprovePublish(
-                                          doctor['id'],
-                                          doctor['full_name'] ?? '',
-                                        );
-                                      } else if (value ==
-                                          'recommended_settings') {
-                                        _showRecommendedSettingsDialog(
-                                          context,
-                                          doctor,
-                                        );
-                                      } else if (value == 'send_message') {
-                                        _showSendMessageDialog(
-                                          context,
-                                          doctor['id'],
-                                          doctor['full_name'] ?? '',
-                                        );
-                                      } else if (value == 'reset_password') {
-                                        _handleResetPassword(
-                                          doctor['id'],
-                                          doctor['full_name'] ?? '',
-                                        );
-                                      } else if (value == 'delete') {
-                                        _handleDeleteDoctor(
-                                          doctor['id'],
-                                          doctor['full_name'] ?? '',
-                                        );
-                                      }
-                                    },
-                                    itemBuilder: (context) => [
-                                      const PopupMenuItem(
-                                        value: 'preview_profile',
-                                        child: Row(
+                                        title: Text(
+                                          doctor['full_name'] ?? 'غير محدد',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        subtitle: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Icon(
-                                              Icons.visibility,
-                                              color: Colors.blueGrey,
+                                            const SizedBox(height: 4),
+                                            Text(doctor['specialization'] ?? 'غير محدد'),
+                                            if (deleteRequested)
+                                              const Text(
+                                                '⚠️ طلب حذف الحساب',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.red,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              )
+                                            else if (publishRequested)
+                                              const Text(
+                                                'الحالة: طلب نشر',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.orange,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              )
+                                            else if (isPublished)
+                                              const Text(
+                                                'الحالة: منشور',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.green,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              )
+                                            else
+                                              const Text(
+                                                'الحالة: غير منشور',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.grey,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            Text(
+                                              doctor['email'] ?? '',
+                                              style: const TextStyle(fontSize: 12),
                                             ),
-                                            SizedBox(width: 8),
-                                            Text('معاينة صفحة الطبيب'),
+                                            Text(
+                                              'رقم الهاتف: ${doctor['phone'] ?? ''}',
+                                              style: const TextStyle(fontSize: 12),
+                                            ),
+                                          ],
+                                        ),
+                                        trailing: PopupMenuButton<String>(
+                                          onSelected: (value) {
+                                            if (value == 'preview_profile') {
+                                              _handlePreviewDoctor(
+                                                doctor['id'],
+                                                const Color(0xFF246BCE),
+                                              );
+                                            } else if (value == 'approve_delete') {
+                                              _handleApproveDeleteRequest(
+                                                doctor['id'],
+                                                doctor['full_name'] ?? '',
+                                              );
+                                            } else if (value == 'reject_delete') {
+                                              _handleRejectDeleteRequest(
+                                                doctor['id'],
+                                                doctor['full_name'] ?? '',
+                                              );
+                                            } else if (value == 'approve_publish') {
+                                              _handleApprovePublish(
+                                                doctor['id'],
+                                                doctor['full_name'] ?? '',
+                                              );
+                                            } else if (value == 'recommended_settings') {
+                                              _showRecommendedSettingsDialog(context, doctor);
+                                            } else if (value == 'send_message') {
+                                              _showSendMessageDialog(
+                                                context,
+                                                doctor['id'],
+                                                doctor['full_name'] ?? '',
+                                              );
+                                            } else if (value == 'reset_password') {
+                                              _handleResetPassword(
+                                                doctor['id'],
+                                                doctor['full_name'] ?? '',
+                                              );
+                                            } else if (value == 'delete') {
+                                              _handleDeleteDoctor(
+                                                doctor['id'],
+                                                doctor['full_name'] ?? '',
+                                              );
+                                            }
+                                          },
+                                          itemBuilder: (context) => [
+                                            const PopupMenuItem(
+                                              value: 'preview_profile',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.visibility, color: Colors.blueGrey),
+                                                  SizedBox(width: 8),
+                                                  Text('معاينة صفحة الطبيب'),
+                                                ],
+                                              ),
+                                            ),
+                                            const PopupMenuDivider(),
+                                            if (deleteRequested) ...[
+                                              const PopupMenuItem(
+                                                value: 'approve_delete',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.check_circle, color: Colors.red),
+                                                    SizedBox(width: 8),
+                                                    Text('موافقة على حذف الحساب'),
+                                                  ],
+                                                ),
+                                              ),
+                                              const PopupMenuItem(
+                                                value: 'reject_delete',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.cancel, color: Colors.orange),
+                                                    SizedBox(width: 8),
+                                                    Text('رفض طلب الحذف'),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                            if (publishRequested)
+                                              const PopupMenuItem(
+                                                value: 'approve_publish',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.verified, color: Colors.green),
+                                                    SizedBox(width: 8),
+                                                    Text('قبول طلب النشر'),
+                                                  ],
+                                                ),
+                                              ),
+                                            if (!deleteRequested && isPublished)
+                                              const PopupMenuItem(
+                                                value: 'recommended_settings',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.star_border, color: Colors.purple),
+                                                    SizedBox(width: 8),
+                                                    Text('إعدادات العرض الموصى به'),
+                                                  ],
+                                                ),
+                                              ),
+                                            if (!deleteRequested)
+                                              const PopupMenuItem(
+                                                value: 'send_message',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.mail_outline, color: Colors.blue),
+                                                    SizedBox(width: 8),
+                                                    Text('إرسال رسالة'),
+                                                  ],
+                                                ),
+                                              ),
+                                            if (!deleteRequested)
+                                              const PopupMenuItem(
+                                                value: 'reset_password',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.lock_reset, color: Colors.orange),
+                                                    SizedBox(width: 8),
+                                                    Text('إعادة تعيين كلمة المرور'),
+                                                  ],
+                                                ),
+                                              ),
+                                            if (!deleteRequested)
+                                              const PopupMenuItem(
+                                                value: 'delete',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(Icons.delete, color: Colors.red),
+                                                    SizedBox(width: 8),
+                                                    Text('حذف الطبيب'),
+                                                  ],
+                                                ),
+                                              ),
                                           ],
                                         ),
                                       ),
-                                      const PopupMenuDivider(),
-                                      if (deleteRequested) ...[
-                                        const PopupMenuItem(
-                                          value: 'approve_delete',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.check_circle,
-                                                color: Colors.red,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text('موافقة على حذف الحساب'),
-                                            ],
-                                          ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+
+              // ====== Radiology centers tab ======
+              _isLoadingRadiology
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'إجمالي مراكز الأشعة',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Color(0xFF666666),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$totalCenters',
+                                      style: const TextStyle(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF9C27B0),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      children: [
+                                        _StatusPill(
+                                          label: 'منشور',
+                                          color: Colors.green,
+                                          count: publishedCenters,
                                         ),
-                                        const PopupMenuItem(
-                                          value: 'reject_delete',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.cancel,
-                                                color: Colors.orange,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text('رفض طلب الحذف'),
-                                            ],
-                                          ),
+                                        _StatusPill(
+                                          label: 'غير منشور',
+                                          color: Colors.grey,
+                                          count: totalCenters - publishedCenters,
                                         ),
                                       ],
-                                      if (publishRequested)
-                                        const PopupMenuItem(
-                                          value: 'approve_publish',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.verified,
-                                                color: Colors.green,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text('قبول طلب النشر'),
-                                            ],
-                                          ),
-                                        ),
-                                      if (!deleteRequested && isPublished)
-                                        const PopupMenuItem(
-                                          value: 'recommended_settings',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.star_border,
-                                                color: Colors.purple,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text('إعدادات العرض الموصى به'),
-                                            ],
-                                          ),
-                                        ),
-                                      if (!deleteRequested)
-                                        const PopupMenuItem(
-                                          value: 'send_message',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.mail_outline,
-                                                color: Colors.blue,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text('إرسال رسالة'),
-                                            ],
-                                          ),
-                                        ),
-                                      if (!deleteRequested)
-                                        const PopupMenuItem(
-                                          value: 'reset_password',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.lock_reset,
-                                                color: Colors.orange,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text('إعادة تعيين كلمة المرور'),
-                                            ],
-                                          ),
-                                        ),
-                                      if (!deleteRequested)
-                                        const PopupMenuItem(
-                                          value: 'delete',
-                                          child: Row(
-                                            children: [
-                                              Icon(
-                                                Icons.delete,
-                                                color: Colors.red,
-                                              ),
-                                              SizedBox(width: 8),
-                                              Text('حذف الطبيب'),
-                                            ],
-                                          ),
-                                        ),
-                                    ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                decoration: InputDecoration(
+                                  hintText: 'بحث باسم المركز أو رقم الهاتف...',
+                                  prefixIcon: const Icon(Icons.search),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
                                   ),
                                 ),
-                              );
-                            },
+                                onChanged: (value) {
+                                  setState(() => _radiologySearchQuery = value);
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: [
+                                    _FilterChip(
+                                      label: 'الكل',
+                                      isSelected: _radiologyStatusFilter == 'all',
+                                      onTap: () => setState(() => _radiologyStatusFilter = 'all'),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _FilterChip(
+                                      label: 'منشور',
+                                      isSelected: _radiologyStatusFilter == 'published',
+                                      onTap: () => setState(() => _radiologyStatusFilter = 'published'),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _FilterChip(
+                                      label: 'غير منشور',
+                                      isSelected: _radiologyStatusFilter == 'not_published',
+                                      onTap: () => setState(() => _radiologyStatusFilter = 'not_published'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ),
-                  ),
-                ],
-              ),
+                        ),
+                        Expanded(
+                          child: filteredCenters.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'لا توجد نتائج مطابقة',
+                                    style: TextStyle(fontSize: 18, color: Color(0xFF666666)),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  itemCount: filteredCenters.length,
+                                  itemBuilder: (context, index) {
+                                    final center = filteredCenters[index];
+                                    final isPublished = center['is_published'] == true;
+                                    final hasBooking = center['has_booking'] == true;
+                                    final name = (center['name'] ?? 'غير محدد').toString();
+
+                                    return Card(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      elevation: 2,
+                                      child: ListTile(
+                                        contentPadding: const EdgeInsets.all(16),
+                                        leading: const CircleAvatar(
+                                          radius: 30,
+                                          backgroundColor: Color(0xFF9C27B0),
+                                          child: Icon(Icons.medical_information, color: Colors.white),
+                                        ),
+                                        title: Text(
+                                          name,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                        ),
+                                        subtitle: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              isPublished ? 'الحالة: منشور' : 'الحالة: غير منشور',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isPublished ? Colors.green : Colors.grey,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            Text(
+                                              hasBooking ? 'الحجز: مُفعّل' : 'الحجز: غير مُفعّل',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: hasBooking ? Colors.blue : Colors.grey,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            Text(
+                                              'الهاتف: ${(center['phone'] ?? '').toString()}',
+                                              style: const TextStyle(fontSize: 12),
+                                            ),
+                                          ],
+                                        ),
+                                        trailing: PopupMenuButton<String>(
+                                          onSelected: (value) {
+                                            if (value == 'preview') {
+                                              _handlePreviewRadiologyCenter(center);
+                                            } else if (value == 'toggle_publish') {
+                                              _handleToggleRadiologyPublished(center);
+                                            } else if (value == 'toggle_booking') {
+                                              _handleToggleRadiologyBooking(center);
+                                            } else if (value == 'delete') {
+                                              _handleDeleteRadiologyCenter(center['id'], name);
+                                            }
+                                          },
+                                          itemBuilder: (context) => [
+                                            const PopupMenuItem(
+                                              value: 'preview',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.visibility, color: Colors.blueGrey),
+                                                  SizedBox(width: 8),
+                                                  Text('معاينة الصفحة'),
+                                                ],
+                                              ),
+                                            ),
+                                            const PopupMenuDivider(),
+                                            PopupMenuItem(
+                                              value: 'toggle_publish',
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.verified,
+                                                    color: Colors.green,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(isPublished ? 'إلغاء النشر' : 'نشر'),
+                                                ],
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              value: 'toggle_booking',
+                                              child: Row(
+                                                children: [
+                                                  const Icon(Icons.event_available, color: Colors.blue),
+                                                  const SizedBox(width: 8),
+                                                  Text(hasBooking ? 'إيقاف الحجز' : 'تفعيل الحجز'),
+                                                ],
+                                              ),
+                                            ),
+                                            const PopupMenuItem(
+                                              value: 'delete',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.delete, color: Colors.red),
+                                                  SizedBox(width: 8),
+                                                  Text('حذف المركز'),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+            ],
+          ),
+        ),
       ),
     );
   }

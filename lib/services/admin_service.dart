@@ -5,6 +5,47 @@ import '../models/doctor_model.dart';
 class AdminService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
+  // ====== Radiology centers (Admin) ======
+  Future<List<Map<String, dynamic>>> getAllRadiologyCenters() async {
+    try {
+      final response = await _supabase
+          .from('radiology_centers')
+          .select(
+            'id,user_id,name,address,phone,whatsapp,facebook,has_booking,is_published,created_at,updated_at',
+          )
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      throw Exception('فشل تحميل قائمة مراكز الأشعة: ${e.toString()}');
+    }
+  }
+
+  Future<void> updateRadiologyCenterSettings({
+    required String centerId,
+    bool? isPublished,
+    bool? hasBooking,
+  }) async {
+    try {
+      final data = <String, dynamic>{
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      if (isPublished != null) data['is_published'] = isPublished;
+      if (hasBooking != null) data['has_booking'] = hasBooking;
+
+      await _supabase.from('radiology_centers').update(data).eq('id', centerId);
+    } catch (e) {
+      throw Exception('فشل تحديث إعدادات مركز الأشعة: ${e.toString()}');
+    }
+  }
+
+  Future<void> deleteRadiologyCenter(String centerId) async {
+    try {
+      await _supabase.from('radiology_centers').delete().eq('id', centerId);
+    } catch (e) {
+      throw Exception('فشل حذف مركز الأشعة: ${e.toString()}');
+    }
+  }
+
   Future<Doctor> getDoctorByIdForAdmin(String doctorId) async {
     try {
       final row = await _supabase
