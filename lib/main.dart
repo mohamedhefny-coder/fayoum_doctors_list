@@ -182,14 +182,34 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
       builder: (context, constraints) {
         if (constraints.maxWidth < 900) return child;
 
-        return ColoredBox(
-          color: AppColors.background,
+        return Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                AppColors.primaryDark.withValues(alpha: 0.06),
+                const Color(0xFFEEF2F7),
+                AppColors.secondary.withValues(alpha: 0.04),
+              ],
+            ),
+          ),
           child: Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1200),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
+              constraints: const BoxConstraints(maxWidth: 1400),
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 0),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 40,
+                      offset: const Offset(0, 0),
+                    ),
+                  ],
+                ),
                 child: child,
               ),
             ),
@@ -283,112 +303,397 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  void _handleNavTap(BuildContext context, int index) {
+    if (index == 3) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => const AccountPage()),
+      );
+    } else if (index == 1) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MyAppointmentsScreen()),
+      );
+    } else {
+      setState(() => _selectedIndex = index);
+    }
+  }
+
+  Widget _buildScrollableContent(BuildContext context) {
+    return Stack(
+      children: [
+        _DecorativeBackground(),
+        SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              children: [
+                _CreativeHeader(
+                  floatingController: _floatingController,
+                  currentDoctor: _currentDoctor,
+                  onDoctorLogin: _loadCurrentDoctor,
+                ),
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const _ModernSearchBar(),
+                      const SizedBox(height: 28),
+                      const _QuickCategories(),
+                      const SizedBox(height: 32),
+                      _SectionHeader(
+                        title: 'التخصصات الشائعة',
+                        icon: Icons.star_rounded,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const AllSpecialtiesPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      const _TrendingSpecialties(),
+                      const SizedBox(height: 32),
+                      _SectionHeader(
+                        title: 'أطباء موصى بهم',
+                        icon: Icons.verified,
+                        onTap: () {},
+                      ),
+                      const SizedBox(height: 16),
+                      const _RecommendedDoctors(),
+                      const SizedBox(height: 32),
+                      _SectionHeader(
+                        title: 'خدمات أخرى',
+                        icon: Icons.medical_services,
+                        onTap: () {},
+                      ),
+                      const SizedBox(height: 16),
+                      const _AdditionalServices(),
+                      const SizedBox(height: 32),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWebWide = kIsWeb && screenWidth > 900;
+
+    if (isWebWide) {
+      return Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: const Color(0xFFEEF2F7),
+          body: Row(
+            textDirection: TextDirection.ltr,
+            children: [
+              _WebSideNav(
+                selectedIndex: _selectedIndex,
+                currentDoctor: _currentDoctor,
+                onTap: (index) => _handleNavTap(context, index),
+              ),
+              Expanded(child: _buildScrollableContent(context)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        body: Stack(
-          children: [
-            // خلفية متدرجة مع أشكال هندسية
-            _DecorativeBackground(),
-
-            SafeArea(
-              child: SingleChildScrollView(
-                child: Column(
-                  children: [
-                    // رأس الصفحة الإبداعي
-                    _CreativeHeader(
-                      floatingController: _floatingController,
-                      currentDoctor: _currentDoctor,
-                      onDoctorLogin: _loadCurrentDoctor,
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // بحث مبتكر
-                          const _ModernSearchBar(),
-                          const SizedBox(height: 28),
-
-                          // فئات سريعة
-                          const _QuickCategories(),
-                          const SizedBox(height: 32),
-
-                          // التخصصات الشائعة
-                          _SectionHeader(
-                            title: 'التخصصات الشائعة',
-                            icon: Icons.star_rounded,
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) =>
-                                      const AllSpecialtiesPage(),
-                                ),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 16),
-                          const _TrendingSpecialties(),
-                          const SizedBox(height: 32),
-
-                          // أطباء مميزون
-                          _SectionHeader(
-                            title: 'أطباء موصى بهم',
-                            icon: Icons.verified,
-                            onTap: () {},
-                          ),
-                          const SizedBox(height: 16),
-                          const _RecommendedDoctors(),
-                          const SizedBox(height: 32),
-
-                          // خدمات إضافية
-                          _SectionHeader(
-                            title: 'خدمات أخرى',
-                            icon: Icons.medical_services,
-                            onTap: () {},
-                          ),
-                          const SizedBox(height: 16),
-                          const _AdditionalServices(),
-                          const SizedBox(height: 32),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+        body: _buildScrollableContent(context),
         bottomNavigationBar: _CustomBottomBar(
           selectedIndex: _selectedIndex,
-          onTap: (index) {
-            if (index == 3) {
-              // فتح صفحة الحساب
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const AccountPage()),
-              );
-            } else if (index == 1) {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const MyAppointmentsScreen()),
-              );
-            } else {
-              setState(() => _selectedIndex = index);
-            }
-          },
+          onTap: (index) => _handleNavTap(context, index),
         ),
         floatingActionButton: _FloatingBookButton(),
         floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       ),
     );
   }
+}
+
+// ====== شريط التنقل الجانبي للويب ======
+class _WebSideNav extends StatelessWidget {
+  const _WebSideNav({
+    required this.selectedIndex,
+    required this.onTap,
+    this.currentDoctor,
+  });
+
+  final int selectedIndex;
+  final Function(int) onTap;
+  final Doctor? currentDoctor;
+
+  static const _items = [
+    _WebNavItem(Icons.home_rounded, 'الرئيسية'),
+    _WebNavItem(Icons.calendar_month_rounded, 'مواعيدي'),
+    _WebNavItem(Icons.favorite_rounded, 'المفضلة'),
+    _WebNavItem(Icons.person_rounded, 'حسابي'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 230,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(2, 0),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── Logo header ──
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(20, 32, 20, 24),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [AppColors.primary, AppColors.primaryDark],
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: const Icon(
+                    Icons.local_hospital_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'دليل أطباء',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Text(
+                  'الفيوم',
+                  style: TextStyle(
+                    color: Colors.white70,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // ── Nav items ──
+          ...List.generate(_items.length, (i) {
+            final item = _items[i];
+            final isSelected = selectedIndex == i;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(14),
+                child: InkWell(
+                  onTap: () => onTap(i),
+                  borderRadius: BorderRadius.circular(14),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.primary.withValues(alpha: 0.12)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          item.icon,
+                          color: isSelected
+                              ? AppColors.primary
+                              : AppColors.textSecondary,
+                          size: 22,
+                        ),
+                        const SizedBox(width: 14),
+                        Text(
+                          item.label,
+                          style: TextStyle(
+                            color: isSelected
+                                ? AppColors.primary
+                                : AppColors.textSecondary,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            fontSize: 14,
+                          ),
+                        ),
+                        if (isSelected) ...[
+                          const Spacer(),
+                          Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+
+          const Divider(height: 32, indent: 20, endIndent: 20),
+
+          // ── تواصل معنا ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ContactUsScreen()),
+                ),
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.support_agent_rounded,
+                        color: AppColors.textSecondary,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 14),
+                      Text(
+                        'تواصل معنا',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Admin ──
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+                ),
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 12,
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.admin_panel_settings_rounded,
+                        color: AppColors.textSecondary,
+                        size: 22,
+                      ),
+                      const SizedBox(width: 14),
+                      Text(
+                        'لوحة الإدارة',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          const Spacer(),
+
+          // ── Quick actions button ──
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const QuickActionsScreen()),
+                ),
+                icon: const Icon(Icons.bolt_rounded, size: 20),
+                label: const Text(
+                  'إجراء سريع',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.secondary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 3,
+                  shadowColor: AppColors.secondary.withValues(alpha: 0.4),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+}
+
+class _WebNavItem {
+  final IconData icon;
+  final String label;
+
+  const _WebNavItem(this.icon, this.label);
 }
 
 // ====== خلفية مزخرفة ======
