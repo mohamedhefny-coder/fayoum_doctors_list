@@ -1,8 +1,10 @@
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class RadiologyService {
   final _supabase = Supabase.instance.client;
+  static const _bucket = 'radiology-images';
 
   // تسجيل حساب مركز أشعة جديد
   Future<Map<String, dynamic>> registerCenter({
@@ -104,6 +106,7 @@ class RadiologyService {
     String? contracts,
     bool hasBooking = false,
     List<Map<String, String>>? doctors,
+    String? coverImageUrl,
   }) async {
     try {
       final user = _supabase.auth.currentUser;
@@ -129,6 +132,7 @@ class RadiologyService {
       if (discounts != null) centerData['discounts'] = discounts;
       if (contracts != null) centerData['contracts'] = contracts;
       if (doctors != null && doctors.isNotEmpty) centerData['doctors'] = doctors;
+      if (coverImageUrl != null) centerData['cover_image_url'] = coverImageUrl;
 
       if (existingCenter != null) {
         await _supabase
@@ -147,6 +151,29 @@ class RadiologyService {
     } catch (e) {
       debugPrint('❌ Error in upsertCenterData: $e');
       rethrow;
+    }
+  }
+
+  // رفع صورة إلى Supabase Storage وإرجاع الرابط العام
+  Future<String?> uploadImage(XFile file, String folder) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return null;
+
+      final ext = file.path.split('.').last.toLowerCase();
+      final fileName = '${user.id}/$folder/${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+      final bytes = await file.readAsBytes();
+      await _supabase.storage.from(_bucket).uploadBinary(
+        fileName,
+        bytes,
+        fileOptions: FileOptions(contentType: 'image/$ext', upsert: true),
+      );
+
+      return _supabase.storage.from(_bucket).getPublicUrl(fileName);
+    } catch (e) {
+      debugPrint('❌ Error uploading image: $e');
+      return null;
     }
   }
 

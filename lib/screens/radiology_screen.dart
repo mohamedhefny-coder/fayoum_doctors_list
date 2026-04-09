@@ -82,10 +82,27 @@ class _RadiologyScreenState extends State<RadiologyScreen>
       if (!mounted) return;
       setState(() {
         _remoteCenters = data.map((json) {
-          // تحويل services من List<dynamic> إلى List<String>
           final rawServices = json['services'];
           final List<String> services = rawServices != null
               ? List<String>.from(rawServices)
+              : [];
+
+          // تحويل features من نص مفصول بـ (،) إلى قائمة
+          final List<String> features = json['features'] != null
+              ? (json['features'] as String)
+                  .split('،')
+                  .map((e) => e.trim())
+                  .where((e) => e.isNotEmpty)
+                  .toList()
+              : [];
+
+          // تحويل doctors من JSONB إلى List<Map<String,String>>
+          final rawDoctors = json['doctors'];
+          final List<Map<String, String>> doctors = rawDoctors != null
+              ? (rawDoctors as List).map((d) {
+                  final map = d as Map<String, dynamic>;
+                  return map.map((k, v) => MapEntry(k, v?.toString() ?? ''));
+                }).toList()
               : [];
 
           return _RadiologyCenter(
@@ -96,15 +113,11 @@ class _RadiologyScreenState extends State<RadiologyScreen>
             ratingCount: json['rating_count'] ?? 0,
             workingHours: json['working_hours'] ?? '',
             services: services,
-            features: json['features'] != null
-                ? (json['features'] as String)
-                    .split('،')
-                    .map((e) => e.trim())
-                    .where((e) => e.isNotEmpty)
-                    .toList()
-                : [],
+            features: features,
             icon: Icons.medical_information,
             color: const Color(0xFF9C27B0),
+            coverImageUrl: json['cover_image_url'],
+            doctors: doctors,
           );
         }).toList();
       });
@@ -429,6 +442,8 @@ class _RadiologyCenter {
   final List<String> features;
   final IconData icon;
   final Color color;
+  final String? coverImageUrl;
+  final List<Map<String, String>> doctors;
 
   _RadiologyCenter({
     required this.name,
@@ -441,6 +456,8 @@ class _RadiologyCenter {
     required this.features,
     required this.icon,
     required this.color,
+    this.coverImageUrl,
+    this.doctors = const [],
   });
 }
 
@@ -740,40 +757,47 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                 background: Stack(
                   fit: StackFit.expand,
                   children: [
+                    // صورة الغلاف أو تدرج افتراضي
+                    if (center.coverImageUrl != null)
+                      Image.network(
+                        center.coverImageUrl!,
+                        fit: BoxFit.cover,
+                        width: double.infinity,
+                        height: double.infinity,
+                        errorBuilder: (_, __, ___) => Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topRight,
+                              end: Alignment.bottomLeft,
+                              colors: [center.color, Colors.purple.shade900],
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topRight,
+                            end: Alignment.bottomLeft,
+                            colors: [
+                              center.color,
+                              center.color.withValues(alpha: 0.6),
+                              Colors.purple.shade900,
+                            ],
+                          ),
+                        ),
+                      ),
+                    // طبقة شفافة فوق الصورة لتحسين قراءة النص
                     Container(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          begin: Alignment.topRight,
-                          end: Alignment.bottomLeft,
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
                           colors: [
-                            center.color,
-                            center.color.withValues(alpha: 0.6),
-                            Colors.purple.shade900,
+                            Colors.black.withValues(alpha: 0.2),
+                            Colors.black.withValues(alpha: 0.55),
                           ],
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      right: -50,
-                      top: -50,
-                      child: Container(
-                        width: 220,
-                        height: 220,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.06),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      left: -30,
-                      bottom: -60,
-                      child: Container(
-                        width: 180,
-                        height: 180,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: Colors.white.withValues(alpha: 0.08),
                         ),
                       ),
                     ),
@@ -782,6 +806,7 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           const SizedBox(height: 40),
+                          if (center.coverImageUrl == null)
                           Container(
                             padding: const EdgeInsets.all(26),
                             decoration: BoxDecoration(
@@ -1087,6 +1112,72 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
+                    // ── أطباء المركز ──
+                    if (center.doctors.isNotEmpty) ...
+                      [
+                        const SizedBox(height: 16),
+                        _DetailBlock(
+                          title: 'أطباء المركز',
+                          icon: Icons.people_rounded,
+                          color: center.color,
+                          children: [
+                            Wrap(
+                              spacing: 12,
+                              runSpacing: 12,
+                              children: center.doctors.map((doc) {
+                                final photoUrl = doc['photo_url'];
+                                final name = doc['name'] ?? '';
+                                final title = doc['title'] ?? '';
+                                return SizedBox(
+                                  width: 90,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 36,
+                                        backgroundColor: center.color
+                                            .withValues(alpha: 0.15),
+                                        backgroundImage: photoUrl != null &&
+                                                photoUrl.isNotEmpty
+                                            ? NetworkImage(photoUrl)
+                                            : null,
+                                        child: photoUrl == null ||
+                                                photoUrl.isEmpty
+                                            ? Icon(Icons.person_rounded,
+                                                size: 36,
+                                                color: center.color)
+                                            : null,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        name,
+                                        style: const TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                        textAlign: TextAlign.center,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (title.isNotEmpty)
+                                        Text(
+                                          title,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            color: Colors.grey[600],
+                                          ),
+                                          textAlign: TextAlign.center,
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                    ],
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                      ],
                     const SizedBox(height: 24),
 
                     // ── Booking button (prominent) ──
@@ -2390,13 +2481,26 @@ class _AddRadiologyCenterScreenState
 
     setState(() => _isSubmitting = true);
     try {
-      final doctorsList = _doctors
-          .where((d) => d.nameController.text.trim().isNotEmpty)
-          .map((d) => {
-                'name': d.nameController.text.trim(),
-                'title': d.titleController.text.trim(),
-              })
-          .toList();
+      // رفع صورة الغلاف إن وجدت
+      String? coverUrl;
+      if (_coverImage != null) {
+        coverUrl = await _radiologyService.uploadImage(_coverImage!, 'cover');
+      }
+
+      // رفع صور الأطباء وبناء القائمة
+      final doctorsList = <Map<String, String>>[];
+      for (final d in _doctors) {
+        if (d.nameController.text.trim().isEmpty) continue;
+        String? photoUrl;
+        if (d.photo != null) {
+          photoUrl = await _radiologyService.uploadImage(d.photo!, 'doctors');
+        }
+        doctorsList.add({
+          'name': d.nameController.text.trim(),
+          'title': d.titleController.text.trim(),
+          if (photoUrl != null) 'photo_url': photoUrl,
+        });
+      }
 
       await _radiologyService.upsertCenterData(
         name: _nameController.text.trim(),
@@ -2431,6 +2535,7 @@ class _AddRadiologyCenterScreenState
             : null,
         hasBooking: _hasBooking,
         doctors: doctorsList.isNotEmpty ? doctorsList : null,
+        coverImageUrl: coverUrl,
       );
 
       if (mounted) {
