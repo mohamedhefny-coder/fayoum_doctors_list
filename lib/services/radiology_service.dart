@@ -98,6 +98,7 @@ class RadiologyService {
     String? whatsapp,
     String? facebook,
     String? locationUrl,
+    String? email,
     String? workingHours,
     bool isOpen24Hours = false,
     List<String>? services,
@@ -107,6 +108,7 @@ class RadiologyService {
     bool hasBooking = false,
     List<Map<String, String>>? doctors,
     String? coverImageUrl,
+    List<String>? galleryImageUrls,
   }) async {
     try {
       final user = _supabase.auth.currentUser;
@@ -126,6 +128,7 @@ class RadiologyService {
       if (whatsapp != null) centerData['whatsapp'] = whatsapp;
       if (facebook != null) centerData['facebook'] = facebook;
       if (locationUrl != null) centerData['location_url'] = locationUrl;
+      if (email != null) centerData['email'] = email;
       if (workingHours != null) centerData['working_hours'] = workingHours;
       if (services != null && services.isNotEmpty) centerData['services'] = services;
       if (features != null) centerData['features'] = features;
@@ -133,6 +136,9 @@ class RadiologyService {
       if (contracts != null) centerData['contracts'] = contracts;
       if (doctors != null && doctors.isNotEmpty) centerData['doctors'] = doctors;
       if (coverImageUrl != null) centerData['cover_image_url'] = coverImageUrl;
+      if (galleryImageUrls != null && galleryImageUrls.isNotEmpty) {
+        centerData['gallery_image_urls'] = galleryImageUrls;
+      }
 
       if (existingCenter != null) {
         await _supabase
@@ -163,11 +169,27 @@ class RadiologyService {
       final ext = file.path.split('.').last.toLowerCase();
       final fileName = '${user.id}/$folder/${DateTime.now().millisecondsSinceEpoch}.$ext';
 
+      String contentType;
+      switch (ext) {
+        case 'jpg':
+        case 'jpeg':
+          contentType = 'image/jpeg';
+          break;
+        case 'png':
+          contentType = 'image/png';
+          break;
+        case 'webp':
+          contentType = 'image/webp';
+          break;
+        default:
+          contentType = 'application/octet-stream';
+      }
+
       final bytes = await file.readAsBytes();
       await _supabase.storage.from(_bucket).uploadBinary(
         fileName,
         bytes,
-        fileOptions: FileOptions(contentType: 'image/$ext', upsert: true),
+        fileOptions: FileOptions(contentType: contentType, upsert: true),
       );
 
       return _supabase.storage.from(_bucket).getPublicUrl(fileName);

@@ -36,9 +36,15 @@ class _RadiologyScreenState extends State<RadiologyScreen>
       name: 'مركز أشعة الفيوم',
       address: 'الفيوم - شارع الجمهورية - أمام مستشفى الفيوم العام',
       phone: '084-6350000',
+      whatsapp: '',
+      facebook: '',
+      locationUrl: '',
+      email: '',
       rating: 4.7,
       ratingCount: 85,
       workingHours: 'يومياً 8 ص - 10 م',
+      isOpen24Hours: false,
+      hasBooking: false,
       services: [
         'أشعة عادية (X-Ray)',
         'أشعة مقطعية (CT Scan)',
@@ -105,18 +111,30 @@ class _RadiologyScreenState extends State<RadiologyScreen>
                 }).toList()
               : [];
 
+          final rawGallery = json['gallery_image_urls'];
+          final List<String> galleryUrls = rawGallery != null
+              ? List<String>.from(rawGallery as List)
+              : [];
+
           return _RadiologyCenter(
             name: json['name'] ?? '',
             address: json['address'] ?? '',
             phone: json['phone'] ?? '',
+            whatsapp: json['whatsapp'] ?? '',
+            facebook: json['facebook'] ?? '',
+            locationUrl: json['location_url'] ?? '',
+            email: json['email'] ?? '',
             rating: (json['rating'] ?? 0.0).toDouble(),
             ratingCount: json['rating_count'] ?? 0,
             workingHours: json['working_hours'] ?? '',
+            isOpen24Hours: json['is_open_24_hours'] ?? false,
+            hasBooking: json['has_booking'] ?? false,
             services: services,
             features: features,
             icon: Icons.medical_information,
             color: const Color(0xFF9C27B0),
             coverImageUrl: json['cover_image_url'],
+            galleryImageUrls: galleryUrls,
             doctors: doctors,
           );
         }).toList();
@@ -435,28 +453,42 @@ class _RadiologyCenter {
   final String name;
   final String address;
   final String phone;
+  final String whatsapp;
+  final String facebook;
+  final String locationUrl;
+  final String email;
   final double rating;
   final int ratingCount;
   final String workingHours;
+  final bool isOpen24Hours;
+  final bool hasBooking;
   final List<String> services;
   final List<String> features;
   final IconData icon;
   final Color color;
   final String? coverImageUrl;
+  final List<String> galleryImageUrls;
   final List<Map<String, String>> doctors;
 
   _RadiologyCenter({
     required this.name,
     required this.address,
     required this.phone,
+    required this.whatsapp,
+    required this.facebook,
+    required this.locationUrl,
+    required this.email,
     required this.rating,
     required this.ratingCount,
     required this.workingHours,
+    required this.isOpen24Hours,
+    required this.hasBooking,
     required this.services,
     required this.features,
     required this.icon,
     required this.color,
     this.coverImageUrl,
+    this.galleryImageUrls = const [],
     this.doctors = const [],
   });
 }
@@ -734,13 +766,54 @@ class _RadiologyDetailsScreen extends StatelessWidget {
 
   final _RadiologyCenter center;
 
+  Future<void> _safeLaunch(Uri uri) async {
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {
+      // ignore
+    }
+  }
+
+  String _normalizeWhatsApp(String raw) {
+    var clean = raw.trim().replaceAll(RegExp(r'[^\d+]'), '');
+    if (clean.isEmpty) return clean;
+
+    if (clean.startsWith('0')) {
+      clean = '20${clean.substring(1)}';
+    } else if (!clean.startsWith('20') && !clean.startsWith('+')) {
+      clean = '20$clean';
+    }
+    clean = clean.replaceAll('+', '');
+    return clean;
+  }
+
   Future<void> _makePhoneCall(String phoneNumber) async {
     final uri = Uri(scheme: 'tel', path: phoneNumber);
-    if (await canLaunchUrl(uri)) await launchUrl(uri);
+    await _safeLaunch(uri);
+  }
+
+  Future<void> _openWhatsApp(String rawNumber) async {
+    final wa = _normalizeWhatsApp(rawNumber);
+    if (wa.isEmpty) return;
+    await _safeLaunch(Uri.parse('https://wa.me/$wa'));
+  }
+
+  Future<void> _openUrl(String url) async {
+    final trimmed = url.trim();
+    if (trimmed.isEmpty) return;
+    final uri = Uri.tryParse(trimmed);
+    if (uri == null) return;
+    await _safeLaunch(uri);
   }
 
   @override
   Widget build(BuildContext context) {
+    final hoursText = center.workingHours.trim().isNotEmpty
+        ? center.workingHours
+        : (center.isOpen24Hours ? 'متاح 24 ساعة' : 'غير محدد');
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -938,21 +1011,14 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                         const SizedBox(width: 10),
                         Expanded(
                           child: _ActionBtn(
-                            icon: Icons.chat_rounded,
+                            icon: Icons.chat_bubble_rounded,
                             label: 'واتساب',
                             color: const Color(0xFF25D366),
-                            onTap: () async {
-                              final number = center.phone
-                                  .replaceAll(RegExp(r'[^0-9]'), '');
-                              final uri = Uri.parse(
-                                'https://wa.me/$number',
-                              );
-                              if (await canLaunchUrl(uri)) {
-                                await launchUrl(
-                                  uri,
-                                  mode: LaunchMode.externalApplication,
-                                );
-                              }
+                            onTap: () {
+                              final number = center.whatsapp.trim().isNotEmpty
+                                  ? center.whatsapp
+                                  : center.phone;
+                              _openWhatsApp(number);
                             },
                           ),
                         ),
@@ -963,16 +1029,12 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                             label: 'الموقع',
                             color: Colors.blue,
                             onTap: () async {
-                              final query = Uri.encodeComponent(center.name);
-                              final uri = Uri.parse(
-                                'https://maps.google.com/?q=$query',
-                              );
-                              if (await canLaunchUrl(uri)) {
-                                await launchUrl(
-                                  uri,
-                                  mode: LaunchMode.externalApplication,
-                                );
+                              if (center.locationUrl.trim().isNotEmpty) {
+                                await _openUrl(center.locationUrl);
+                                return;
                               }
+                              final query = Uri.encodeComponent(center.name);
+                              await _openUrl('https://maps.google.com/?q=$query');
                             },
                           ),
                         ),
@@ -994,7 +1056,7 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                         const SizedBox(height: 10),
                         _DetailRow(
                           icon: Icons.schedule_rounded,
-                          text: center.workingHours,
+                          text: hoursText,
                           color: center.color,
                         ),
                         const SizedBox(height: 10),
@@ -1003,6 +1065,50 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                           text: center.phone,
                           color: center.color,
                           onTap: () => _makePhoneCall(center.phone),
+                        ),
+                        if (center.whatsapp.trim().isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          _DetailRow(
+                            icon: Icons.chat_bubble_rounded,
+                            text: center.whatsapp,
+                            color: const Color(0xFF25D366),
+                            onTap: () => _openWhatsApp(center.whatsapp),
+                          ),
+                        ],
+                        if (center.facebook.trim().isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          _DetailRow(
+                            icon: Icons.facebook,
+                            text: 'فتح صفحة فيسبوك',
+                            color: Colors.blue.shade700,
+                            onTap: () => _openUrl(center.facebook),
+                          ),
+                        ],
+                        if (center.locationUrl.trim().isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          _DetailRow(
+                            icon: Icons.map_rounded,
+                            text: 'فتح الموقع على الخريطة',
+                            color: center.color,
+                            onTap: () => _openUrl(center.locationUrl),
+                          ),
+                        ],
+                        if (center.email.trim().isNotEmpty) ...[
+                          const SizedBox(height: 10),
+                          _DetailRow(
+                            icon: Icons.email_rounded,
+                            text: center.email,
+                            color: center.color,
+                            onTap: () => _safeLaunch(
+                              Uri(scheme: 'mailto', path: center.email.trim()),
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 10),
+                        _DetailRow(
+                          icon: Icons.event_available_rounded,
+                          text: center.hasBooking ? 'الحجز متاح' : 'الحجز غير متاح',
+                          color: center.hasBooking ? Colors.green : Colors.grey,
                         ),
                       ],
                     ),
@@ -1148,6 +1254,43 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                                                 color: center.color)
                                             : null,
                                       ),
+
+                                    // ── معرض الصور ──
+                                    if (center.galleryImageUrls.isNotEmpty) ...[
+                                      const SizedBox(height: 16),
+                                      _DetailBlock(
+                                        title: 'معرض الصور',
+                                        icon: Icons.photo_library_rounded,
+                                        color: center.color,
+                                        children: [
+                                          SizedBox(
+                                            height: 110,
+                                            child: ListView.separated(
+                                              scrollDirection: Axis.horizontal,
+                                              itemCount: center.galleryImageUrls.length,
+                                              separatorBuilder: (_, __) => const SizedBox(width: 10),
+                                              itemBuilder: (context, i) {
+                                                final url = center.galleryImageUrls[i];
+                                                return ClipRRect(
+                                                  borderRadius: BorderRadius.circular(12),
+                                                  child: AspectRatio(
+                                                    aspectRatio: 1,
+                                                    child: Image.network(
+                                                      url,
+                                                      fit: BoxFit.cover,
+                                                      errorBuilder: (_, __, ___) => Container(
+                                                        color: Colors.grey.shade200,
+                                                        child: const Icon(Icons.broken_image_outlined),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
                                       const SizedBox(height: 6),
                                       Text(
                                         name,
@@ -2380,6 +2523,7 @@ class _AddRadiologyCenterScreenState
   bool _isSubmitting = false;
   bool _isLoadingData = true;
   String? _existingCoverUrl;
+  final List<String> _existingGalleryUrls = [];
   final _radiologyService = RadiologyService();
   final List<_DoctorEntry> _doctors = [];
 
@@ -2418,6 +2562,13 @@ class _AddRadiologyCenterScreenState
 
       // صورة الغلاف الموجودة
       _existingCoverUrl = data['cover_image_url'];
+
+      // صور الألبوم الموجودة
+      final rawGallery = data['gallery_image_urls'];
+      if (rawGallery != null) {
+        _existingGalleryUrls.clear();
+        _existingGalleryUrls.addAll(List<String>.from(rawGallery as List));
+      }
 
       // تعبئة قائمة الأطباء
       final rawDoctors = data['doctors'];
@@ -2489,10 +2640,15 @@ class _AddRadiologyCenterScreenState
     final picked = await _imagePicker.pickMultiImage(imageQuality: 80);
     if (picked.isNotEmpty) {
       setState(() {
-        final remaining = 10 - _galleryImages.length;
+        final total = _existingGalleryUrls.length + _galleryImages.length;
+        final remaining = 10 - total;
         _galleryImages.addAll(picked.take(remaining));
       });
     }
+  }
+
+  void _removeExistingGalleryUrl(int index) {
+    setState(() => _existingGalleryUrls.removeAt(index));
   }
 
   void _removeGalleryImage(int index) {
@@ -2549,6 +2705,9 @@ class _AddRadiologyCenterScreenState
       String? coverUrl = _existingCoverUrl;
       if (_coverImage != null) {
         coverUrl = await _radiologyService.uploadImage(_coverImage!, 'cover');
+        if (coverUrl == null) {
+          throw Exception('فشل رفع صورة الغلاف');
+        }
       }
 
       // رفع صور الأطباء وبناء القائمة
@@ -2558,12 +2717,25 @@ class _AddRadiologyCenterScreenState
         String? photoUrl = d.existingPhotoUrl;
         if (d.photo != null) {
           photoUrl = await _radiologyService.uploadImage(d.photo!, 'doctors');
+          if (photoUrl == null) {
+            throw Exception('فشل رفع صورة أحد الأطباء');
+          }
         }
         doctorsList.add({
           'name': d.nameController.text.trim(),
           'title': d.titleController.text.trim(),
           if (photoUrl != null) 'photo_url': photoUrl,
         });
+      }
+
+      // رفع صور الألبوم (مع الاحتفاظ بالروابط القديمة)
+      final galleryUrls = <String>[..._existingGalleryUrls];
+      for (final img in _galleryImages) {
+        final url = await _radiologyService.uploadImage(img, 'gallery');
+        if (url == null) {
+          throw Exception('فشل رفع صورة من معرض الصور');
+        }
+        galleryUrls.add(url);
       }
 
       await _radiologyService.upsertCenterData(
@@ -2600,6 +2772,7 @@ class _AddRadiologyCenterScreenState
         hasBooking: _hasBooking,
         doctors: doctorsList.isNotEmpty ? doctorsList : null,
         coverImageUrl: coverUrl,
+        galleryImageUrls: galleryUrls.isNotEmpty ? galleryUrls : null,
       );
 
       if (mounted) {
@@ -2868,7 +3041,7 @@ class _AddRadiologyCenterScreenState
                         style: TextStyle(color: Colors.grey, fontSize: 13),
                       ),
                       Text(
-                        '${_galleryImages.length}/10',
+                        '${_existingGalleryUrls.length + _galleryImages.length}/10',
                         style: const TextStyle(
                           color: Color(0xFF9C27B0),
                           fontWeight: FontWeight.bold,
@@ -2883,7 +3056,7 @@ class _AddRadiologyCenterScreenState
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
-                        if (_galleryImages.length < 10)
+                        if (_existingGalleryUrls.length + _galleryImages.length < 10)
                           GestureDetector(
                             onTap: _pickGalleryImages,
                             child: Container(
@@ -2919,6 +3092,63 @@ class _AddRadiologyCenterScreenState
                               ),
                             ),
                           ),
+                        ...List.generate(_existingGalleryUrls.length, (i) {
+                          final url = _existingGalleryUrls[i];
+                          return Container(
+                            width: 100,
+                            height: 110,
+                            margin: const EdgeInsets.only(left: 10),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.grey.shade300, width: 1),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.network(
+                                  url,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color: Colors.grey.shade200,
+                                    child: const Icon(Icons.broken_image_outlined),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: GestureDetector(
+                                    onTap: () => _removeExistingGalleryUrl(i),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(3),
+                                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                      child: const Icon(Icons.close, color: Colors.white, size: 14),
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 4,
+                                  left: 4,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: Colors.black.withValues(alpha: 0.55),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      '${i + 1}',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
                         ...List.generate(_galleryImages.length, (i) {
                           return Container(
                             width: 100,
@@ -2968,7 +3198,7 @@ class _AddRadiologyCenterScreenState
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
-                                      '${i + 1}',
+                                      '${_existingGalleryUrls.length + i + 1}',
                                       style: const TextStyle(
                                         color: Colors.white,
                                         fontSize: 11,
@@ -2984,7 +3214,7 @@ class _AddRadiologyCenterScreenState
                       ],
                     ),
                   ),
-                  if (_galleryImages.isEmpty) ...[
+                  if (_galleryImages.isEmpty && _existingGalleryUrls.isEmpty) ...[
                     const SizedBox(height: 8),
                     const Center(
                       child: Text(
