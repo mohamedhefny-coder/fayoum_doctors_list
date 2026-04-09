@@ -2344,6 +2344,7 @@ class _DoctorEntry {
   final TextEditingController nameController = TextEditingController();
   final TextEditingController titleController = TextEditingController();
   XFile? photo;
+  String? existingPhotoUrl;
 
   void dispose() {
     nameController.dispose();
@@ -2377,7 +2378,64 @@ class _AddRadiologyCenterScreenState
 
   bool _hasBooking = false;
   bool _isSubmitting = false;
-  final _radiologyService = RadiologyService();  final List<_DoctorEntry> _doctors = [];
+  bool _isLoadingData = true;
+  String? _existingCoverUrl;
+  final _radiologyService = RadiologyService();
+  final List<_DoctorEntry> _doctors = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExistingData();
+  }
+
+  Future<void> _loadExistingData() async {
+    try {
+      final data = await _radiologyService.getCurrentCenter();
+      if (data == null) return;
+
+      // تعبئة الحقول النصية
+      _nameController.text = data['name'] ?? '';
+      _addressController.text = data['address'] ?? '';
+      _phoneController.text = data['phone'] ?? '';
+      _whatsappController.text = data['whatsapp'] ?? '';
+      _facebookController.text = data['facebook'] ?? '';
+      _locationController.text = data['location_url'] ?? '';
+      _workingHoursController.text = data['working_hours'] ?? '';
+      _featuresController.text = data['features'] ?? '';
+      _discountsController.text = data['discounts'] ?? '';
+      _contractsController.text = data['contracts'] ?? '';
+
+      // تعبئة الخدمات المختارة
+      final rawServices = data['services'];
+      if (rawServices != null) {
+        _selectedServices.addAll(List<String>.from(rawServices));
+      }
+
+      // الحالات المنطقية
+      _isOpen24Hours = data['is_open_24_hours'] ?? false;
+      _hasBooking = data['has_booking'] ?? false;
+
+      // صورة الغلاف الموجودة
+      _existingCoverUrl = data['cover_image_url'];
+
+      // تعبئة قائمة الأطباء
+      final rawDoctors = data['doctors'];
+      if (rawDoctors != null) {
+        for (final d in (rawDoctors as List)) {
+          final entry = _DoctorEntry();
+          entry.nameController.text = d['name'] ?? '';
+          entry.titleController.text = d['title'] ?? '';
+          entry.existingPhotoUrl = d['photo_url'];
+          _doctors.add(entry);
+        }
+      }
+    } catch (_) {
+      // في حالة خطأ نبدأ بنموذج فارغ
+    } finally {
+      if (mounted) setState(() => _isLoadingData = false);
+    }
+  }
 
   void _addDoctor() {
     setState(() => _doctors.add(_DoctorEntry()));
@@ -2487,8 +2545,8 @@ class _AddRadiologyCenterScreenState
 
     setState(() => _isSubmitting = true);
     try {
-      // رفع صورة الغلاف إن وجدت
-      String? coverUrl;
+      // رفع صورة الغلاف إن وجدت (أو الاحتفاظ بالموجودة)
+      String? coverUrl = _existingCoverUrl;
       if (_coverImage != null) {
         coverUrl = await _radiologyService.uploadImage(_coverImage!, 'cover');
       }
@@ -2497,7 +2555,7 @@ class _AddRadiologyCenterScreenState
       final doctorsList = <Map<String, String>>[];
       for (final d in _doctors) {
         if (d.nameController.text.trim().isEmpty) continue;
-        String? photoUrl;
+        String? photoUrl = d.existingPhotoUrl;
         if (d.photo != null) {
           photoUrl = await _radiologyService.uploadImage(d.photo!, 'doctors');
         }
@@ -2569,13 +2627,32 @@ class _AddRadiologyCenterScreenState
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingData) {
+      return const Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: Color(0xFFF8F5FF),
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(color: Color(0xFF9C27B0)),
+                SizedBox(height: 16),
+                Text('جاري تحميل بيانات المركز...'),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text(
-            'إضافة مركز أشعة',
-            style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          title: Text(
+            _nameController.text.isNotEmpty ? 'تعديل بيانات المركز' : 'إضافة مركز أشعة',
+            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
           ),
           backgroundColor: const Color(0xFF9C27B0),
           iconTheme: const IconThemeData(color: Colors.white),
@@ -2655,39 +2732,8 @@ class _AddRadiologyCenterScreenState
                         ),
                       ),
                       clipBehavior: Clip.antiAlias,
-                      child: _coverImage == null
-                          ? Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF9C27B0).withValues(alpha: 0.12),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.add_photo_alternate_outlined,
-                                    size: 36,
-                                    color: Color(0xFF9C27B0),
-                                  ),
-                                ),
-                                const SizedBox(height: 10),
-                                const Text(
-                                  'اضغط لاختيار صورة الغلاف',
-                                  style: TextStyle(
-                                    color: Color(0xFF9C27B0),
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                const Text(
-                                  'JPG, PNG - الحجم الأقصى 5 ميجا',
-                                  style: TextStyle(color: Colors.grey, fontSize: 12),
-                                ),
-                              ],
-                            )
-                          : Stack(
+                      child: _coverImage != null
+                          ? Stack(
                               fit: StackFit.expand,
                               children: [
                                 _buildImagePreview(_coverImage!),
@@ -2739,7 +2785,70 @@ class _AddRadiologyCenterScreenState
                                   ),
                                 ),
                               ],
-                            ),
+                            )
+                          : _existingCoverUrl != null
+                              // صورة محفوظة من قبل
+                              ? Stack(
+                                  fit: StackFit.expand,
+                                  children: [
+                                    Image.network(
+                                      _existingCoverUrl!,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => const Center(
+                                        child: Icon(Icons.broken_image_outlined, size: 40, color: Colors.grey),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      top: 8,
+                                      left: 8,
+                                      child: GestureDetector(
+                                        onTap: () => setState(() => _existingCoverUrl = null),
+                                        child: Container(
+                                          padding: const EdgeInsets.all(4),
+                                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                          child: const Icon(Icons.close, color: Colors.white, size: 18),
+                                        ),
+                                      ),
+                                    ),
+                                    Positioned(
+                                      bottom: 8,
+                                      right: 8,
+                                      child: GestureDetector(
+                                        onTap: _pickCoverImage,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.6),
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                                            Icon(Icons.edit, color: Colors.white, size: 14),
+                                            SizedBox(width: 4),
+                                            Text('تغيير', style: TextStyle(color: Colors.white, fontSize: 12)),
+                                          ]),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                )
+                              // لا توجد صورة
+                              : Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(14),
+                                      decoration: BoxDecoration(
+                                        color: const Color(0xFF9C27B0).withValues(alpha: 0.12),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.add_photo_alternate_outlined, size: 36, color: Color(0xFF9C27B0)),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    const Text('اضغط لاختيار صورة الغلاف', style: TextStyle(color: Color(0xFF9C27B0), fontWeight: FontWeight.w600, fontSize: 14)),
+                                    const SizedBox(height: 4),
+                                    const Text('JPG, PNG - الحجم الأقصى 5 ميجا', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                                  ],
+                                ),
                     ),
                   ),
                 ],
@@ -3114,26 +3223,8 @@ class _AddRadiologyCenterScreenState
                                     ),
                                   ),
                                   clipBehavior: Clip.antiAlias,
-                                  child: doc.photo == null
-                                      ? const Column(
-                                          mainAxisAlignment: MainAxisAlignment.center,
-                                          children: [
-                                            Icon(
-                                              Icons.add_a_photo_outlined,
-                                              color: Color(0xFF9C27B0),
-                                              size: 26,
-                                            ),
-                                            SizedBox(height: 4),
-                                            Text(
-                                              'صورة',
-                                              style: TextStyle(
-                                                fontSize: 11,
-                                                color: Color(0xFF9C27B0),
-                                              ),
-                                            ),
-                                          ],
-                                        )
-                                      : Stack(
+                                  child: doc.photo != null
+                                      ? Stack(
                                           fit: StackFit.expand,
                                           children: [
                                             _buildImagePreview(doc.photo!),
@@ -3142,19 +3233,40 @@ class _AddRadiologyCenterScreenState
                                               right: 2,
                                               child: Container(
                                                 padding: const EdgeInsets.all(3),
-                                                decoration: const BoxDecoration(
-                                                  color: Color(0xFF9C27B0),
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: const Icon(
-                                                  Icons.edit,
-                                                  color: Colors.white,
-                                                  size: 11,
-                                                ),
+                                                decoration: const BoxDecoration(color: Color(0xFF9C27B0), shape: BoxShape.circle),
+                                                child: const Icon(Icons.edit, color: Colors.white, size: 11),
                                               ),
                                             ),
                                           ],
-                                        ),
+                                        )
+                                      : doc.existingPhotoUrl != null
+                                          ? Stack(
+                                              fit: StackFit.expand,
+                                              children: [
+                                                Image.network(
+                                                  doc.existingPhotoUrl!,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, size: 30, color: Colors.grey),
+                                                ),
+                                                Positioned(
+                                                  bottom: 2,
+                                                  right: 2,
+                                                  child: Container(
+                                                    padding: const EdgeInsets.all(3),
+                                                    decoration: const BoxDecoration(color: Color(0xFF9C27B0), shape: BoxShape.circle),
+                                                    child: const Icon(Icons.edit, color: Colors.white, size: 11),
+                                                  ),
+                                                ),
+                                              ],
+                                            )
+                                          : const Column(
+                                              mainAxisAlignment: MainAxisAlignment.center,
+                                              children: [
+                                                Icon(Icons.add_a_photo_outlined, color: Color(0xFF9C27B0), size: 26),
+                                                SizedBox(height: 4),
+                                                Text('صورة', style: TextStyle(fontSize: 11, color: Color(0xFF9C27B0))),
+                                              ],
+                                            ),
                                 ),
                               ),
                               const SizedBox(width: 12),
