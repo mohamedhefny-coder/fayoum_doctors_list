@@ -818,6 +818,64 @@ class _RadiologyDetailsScreen extends StatelessWidget {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFF8F5FF),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.08),
+                  blurRadius: 18,
+                  offset: const Offset(0, -6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _ActionBtn(
+                    icon: Icons.phone_rounded,
+                    label: 'اتصال',
+                    color: Colors.green,
+                    onTap: () => _makePhoneCall(center.phone),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ActionBtn(
+                    icon: Icons.chat_bubble_rounded,
+                    label: 'واتساب',
+                    color: const Color(0xFF25D366),
+                    onTap: () {
+                      final number = center.whatsapp.trim().isNotEmpty
+                          ? center.whatsapp
+                          : center.phone;
+                      _openWhatsApp(number);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ActionBtn(
+                    icon: Icons.location_on_rounded,
+                    label: 'الموقع',
+                    color: Colors.blue,
+                    onTap: () async {
+                      if (center.locationUrl.trim().isNotEmpty) {
+                        await _openUrl(center.locationUrl);
+                        return;
+                      }
+                      final query = Uri.encodeComponent(center.name);
+                      await _openUrl('https://maps.google.com/?q=$query');
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
         body: CustomScrollView(
           slivers: [
             // ── Hero AppBar ──
@@ -997,55 +1055,10 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Quick action buttons ──
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _ActionBtn(
-                            icon: Icons.phone_rounded,
-                            label: 'اتصال',
-                            color: Colors.green,
-                            onTap: () => _makePhoneCall(center.phone),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _ActionBtn(
-                            icon: Icons.chat_bubble_rounded,
-                            label: 'واتساب',
-                            color: const Color(0xFF25D366),
-                            onTap: () {
-                              final number = center.whatsapp.trim().isNotEmpty
-                                  ? center.whatsapp
-                                  : center.phone;
-                              _openWhatsApp(number);
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: _ActionBtn(
-                            icon: Icons.location_on_rounded,
-                            label: 'الموقع',
-                            color: Colors.blue,
-                            onTap: () async {
-                              if (center.locationUrl.trim().isNotEmpty) {
-                                await _openUrl(center.locationUrl);
-                                return;
-                              }
-                              final query = Uri.encodeComponent(center.name);
-                              await _openUrl('https://maps.google.com/?q=$query');
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // ── Contact info ──
+                    // ── Overview ──
                     _DetailBlock(
-                      title: 'معلومات التواصل',
-                      icon: Icons.info_outline_rounded,
+                      title: 'نظرة عامة',
+                      icon: Icons.dashboard_customize_rounded,
                       color: center.color,
                       children: [
                         _DetailRow(
@@ -1058,6 +1071,16 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                           icon: Icons.schedule_rounded,
                           text: hoursText,
                           color: center.color,
+                        ),
+                        const SizedBox(height: 10),
+                        _DetailRow(
+                          icon: Icons.event_available_rounded,
+                          text: center.hasBooking
+                              ? 'الحجز متاح'
+                              : 'الحجز غير متاح',
+                          color: center.hasBooking
+                              ? Colors.green
+                              : Colors.grey,
                         ),
                         const SizedBox(height: 10),
                         _DetailRow(
@@ -1104,12 +1127,6 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                             ),
                           ),
                         ],
-                        const SizedBox(height: 10),
-                        _DetailRow(
-                          icon: Icons.event_available_rounded,
-                          text: center.hasBooking ? 'الحجز متاح' : 'الحجز غير متاح',
-                          color: center.hasBooking ? Colors.green : Colors.grey,
-                        ),
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -1409,33 +1426,6 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-
-                    // ── Call button ──
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () => _makePhoneCall(center.phone),
-                        icon: const Icon(Icons.phone_rounded, size: 22),
-                        label: const Text(
-                          'اتصل الآن',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: center.color,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          elevation: 4,
-                          shadowColor: center.color.withValues(alpha: 0.4),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
 
                     // ── QR Code ──
                     _QrShareCard(center: center),
