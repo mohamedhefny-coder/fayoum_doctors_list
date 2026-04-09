@@ -23,21 +23,7 @@ class RadiologyService {
         throw Exception('فشل إنشاء الحساب');
       }
 
-      final centerData = {
-        'user_id': authResponse.user!.id,
-        'name': centerName,
-        'email': email,
-        'is_published': false,
-      };
-
-      try {
-        await _supabase.from('radiology_centers').insert(centerData);
-        debugPrint('✅ Radiology center record created!');
-      } catch (e) {
-        debugPrint('❌ Error inserting radiology center: $e');
-        await _supabase.auth.admin.deleteUser(authResponse.user!.id);
-        throw Exception('فشل في إنشاء سجل المركز: $e');
-      }
+      // لا نُدرج في الجدول هنا — يتم ذلك من AddRadiologyCenterScreen بعد تسجيل الدخول
 
       return {
         'success': true,

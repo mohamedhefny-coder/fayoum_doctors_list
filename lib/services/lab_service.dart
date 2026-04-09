@@ -13,9 +13,8 @@ class LabService {
   }) async {
     try {
       debugPrint('📝 Starting lab registration...');
-      debugPrint('📝 Lab name: $labName, Email: $email');
 
-      // 1. إنشاء حساب المستخدم (يتم تسجيل الدخول تلقائياً)
+      // إنشاء حساب المستخدم فقط (البيانات تُحفظ لاحقاً من AddLabScreen)
       final authResponse = await _supabase.auth.signUp(
         email: email,
         password: password,
@@ -26,26 +25,6 @@ class LabService {
 
       if (authResponse.user == null) {
         throw Exception('فشل إنشاء الحساب');
-      }
-
-      // 2. إنشاء سجل المعمل في قاعدة البيانات
-      final labData = {
-        'user_id': authResponse.user!.id,
-        'name': labName,
-        'email': email,
-        'is_published': false,
-      };
-
-      debugPrint('📝 Inserting lab data: $labData');
-
-      try {
-        await _supabase.from('labs').insert(labData);
-        debugPrint('✅ Lab record created successfully!');
-      } catch (e) {
-        debugPrint('❌ Error inserting lab: $e');
-        // في حالة فشل إدخال البيانات، نحذف المستخدم
-        await _supabase.auth.admin.deleteUser(authResponse.user!.id);
-        throw Exception('فشل في إنشاء سجل المعمل: $e');
       }
 
       return {
