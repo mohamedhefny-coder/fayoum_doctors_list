@@ -111,24 +111,24 @@ class RadiologyService {
 
       final existingCenter = await getCurrentCenter();
 
-      final centerData = {
-        'user_id': user.id,
+      // بناء البيانات مع حذف القيم الفارغة
+      final Map<String, dynamic> centerData = {
         'name': name,
-        'address': address,
-        'phone': phone,
-        'whatsapp': whatsapp,
-        'facebook': facebook,
-        'location_url': locationUrl,
-        'working_hours': workingHours,
         'is_open_24_hours': isOpen24Hours,
-        'services': services,
-        'features': features,
-        'discounts': discounts,
-        'contracts': contracts,
         'has_booking': hasBooking,
-        'doctors': doctors,
         'is_published': true,
       };
+      if (address != null) centerData['address'] = address;
+      if (phone != null) centerData['phone'] = phone;
+      if (whatsapp != null) centerData['whatsapp'] = whatsapp;
+      if (facebook != null) centerData['facebook'] = facebook;
+      if (locationUrl != null) centerData['location_url'] = locationUrl;
+      if (workingHours != null) centerData['working_hours'] = workingHours;
+      if (services != null && services.isNotEmpty) centerData['services'] = services;
+      if (features != null) centerData['features'] = features;
+      if (discounts != null) centerData['discounts'] = discounts;
+      if (contracts != null) centerData['contracts'] = contracts;
+      if (doctors != null && doctors.isNotEmpty) centerData['doctors'] = doctors;
 
       if (existingCenter != null) {
         await _supabase
@@ -137,12 +137,31 @@ class RadiologyService {
             .eq('user_id', user.id);
         debugPrint('✅ Radiology center updated!');
       } else {
+        centerData['user_id'] = user.id;
         await _supabase.from('radiology_centers').insert(centerData);
         debugPrint('✅ Radiology center inserted!');
       }
+    } on PostgrestException catch (e) {
+      debugPrint('❌ Postgrest error: ${e.code} - ${e.message}');
+      throw Exception('خطأ قاعدة البيانات: ${e.message}');
     } catch (e) {
       debugPrint('❌ Error in upsertCenterData: $e');
-      throw Exception('خطأ في حفظ البيانات: $e');
+      rethrow;
+    }
+  }
+
+  // الحصول على جميع مراكز الأشعة المنشورة
+  Future<List<Map<String, dynamic>>> getPublishedCenters() async {
+    try {
+      final response = await _supabase
+          .from('radiology_centers')
+          .select()
+          .eq('is_published', true)
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      debugPrint('❌ Error fetching published centers: $e');
+      throw Exception('خطأ في جلب مراكز الأشعة: $e');
     }
   }
 

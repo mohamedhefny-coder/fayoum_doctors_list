@@ -27,8 +27,11 @@ class _RadiologyScreenState extends State<RadiologyScreen>
   ];
 
   final Set<String> _selectedServices = <String>{};
+  final _radiologyService = RadiologyService();
+  List<_RadiologyCenter> _remoteCenters = [];
+  bool _isLoadingRemote = true;
 
-  late final List<_RadiologyCenter> _allCenters = <_RadiologyCenter>[
+  late final List<_RadiologyCenter> _staticCenters = <_RadiologyCenter>[
     _RadiologyCenter(
       name: 'مركز أشعة الفيوم',
       address: 'الفيوم - شارع الجمهورية - أمام مستشفى الفيوم العام',
@@ -55,6 +58,12 @@ class _RadiologyScreenState extends State<RadiologyScreen>
     ),
   ];
 
+  List<_RadiologyCenter> get _allCenters {
+    final remoteNames = _remoteCenters.map((c) => c.name).toSet();
+    final local = _staticCenters.where((c) => !remoteNames.contains(c.name)).toList();
+    return [..._remoteCenters, ...local];
+  }
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +71,48 @@ class _RadiologyScreenState extends State<RadiologyScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..forward();
+    _loadRemoteCenters();
+  }
+
+  Future<void> _loadRemoteCenters() async {
+    if (!mounted) return;
+    setState(() => _isLoadingRemote = true);
+    try {
+      final data = await _radiologyService.getPublishedCenters();
+      if (!mounted) return;
+      setState(() {
+        _remoteCenters = data.map((json) {
+          // تحويل services من List<dynamic> إلى List<String>
+          final rawServices = json['services'];
+          final List<String> services = rawServices != null
+              ? List<String>.from(rawServices)
+              : [];
+
+          return _RadiologyCenter(
+            name: json['name'] ?? '',
+            address: json['address'] ?? '',
+            phone: json['phone'] ?? '',
+            rating: (json['rating'] ?? 0.0).toDouble(),
+            ratingCount: json['rating_count'] ?? 0,
+            workingHours: json['working_hours'] ?? '',
+            services: services,
+            features: json['features'] != null
+                ? (json['features'] as String)
+                    .split('،')
+                    .map((e) => e.trim())
+                    .where((e) => e.isNotEmpty)
+                    .toList()
+                : [],
+            icon: Icons.medical_information,
+            color: const Color(0xFF9C27B0),
+          );
+        }).toList();
+      });
+    } catch (_) {
+      // في حالة خطأ نستمر بالبيانات المحلية
+    } finally {
+      if (mounted) setState(() => _isLoadingRemote = false);
+    }
   }
 
   @override
@@ -152,6 +203,8 @@ class _RadiologyScreenState extends State<RadiologyScreen>
                           );
                           // تسجيل خروج بعد الانتهاء
                           await RadiologyService().signOut();
+                          // إعادة تحميل البيانات
+                          _loadRemoteCenters();
                         }
                       },
                     ),
@@ -291,7 +344,18 @@ class _RadiologyScreenState extends State<RadiologyScreen>
               // قائمة المراكز
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
-                sliver: centers.isEmpty
+                sliver: _isLoadingRemote
+                    ? const SliverToBoxAdapter(
+                        child: Center(
+                          child: Padding(
+                            padding: EdgeInsets.all(40),
+                            child: CircularProgressIndicator(
+                              color: Color(0xFF9C27B0),
+                            ),
+                          ),
+                        ),
+                      )
+                    : centers.isEmpty
                     ? SliverToBoxAdapter(
                         child: Center(
                           child: Padding(
