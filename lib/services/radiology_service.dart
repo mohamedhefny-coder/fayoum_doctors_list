@@ -164,10 +164,17 @@ class RadiologyService {
   Future<String?> uploadImage(XFile file, String folder) async {
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null) return null;
+      if (user == null) {
+        throw Exception('يجب تسجيل الدخول أولاً (لا يوجد مستخدم حالي)');
+      }
 
-      final ext = file.path.split('.').last.toLowerCase();
-      final fileName = '${user.id}/$folder/${DateTime.now().millisecondsSinceEpoch}.$ext';
+      // على الويب file.path قد لا يحتوي امتدادًا صحيحًا، لذلك نستخدم الاسم إن وجد
+      final rawName = (file.name.isNotEmpty ? file.name : file.path);
+      final hasDot = rawName.contains('.') && !rawName.endsWith('.');
+      final ext = hasDot ? rawName.split('.').last.toLowerCase() : 'jpg';
+
+      final fileName =
+          '${user.id}/$folder/${DateTime.now().millisecondsSinceEpoch}.$ext';
 
       String contentType;
       switch (ext) {
@@ -186,16 +193,27 @@ class RadiologyService {
       }
 
       final bytes = await file.readAsBytes();
+
       await _supabase.storage.from(_bucket).uploadBinary(
-        fileName,
-        bytes,
-        fileOptions: FileOptions(contentType: contentType, upsert: true),
-      );
+            fileName,
+            bytes,
+            fileOptions: FileOptions(contentType: contentType, upsert: true),
+          );
 
       return _supabase.storage.from(_bucket).getPublicUrl(fileName);
+    } on StorageException catch (e) {
+      debugPrint(
+        '❌ StorageException uploading image (bucket=$_bucket, folder=$folder): ${e.message}',
+      );
+      throw Exception('خطأ رفع الصور (Storage): ${e.message}');
+    } on PostgrestException catch (e) {
+      debugPrint(
+        '❌ PostgrestException uploading image (bucket=$_bucket, folder=$folder): ${e.message}',
+      );
+      throw Exception('خطأ رفع الصور (DB): ${e.message}');
     } catch (e) {
-      debugPrint('❌ Error uploading image: $e');
-      return null;
+      debugPrint('❌ Error uploading image (bucket=$_bucket, folder=$folder): $e');
+      throw Exception('خطأ رفع الصور: $e');
     }
   }
 
