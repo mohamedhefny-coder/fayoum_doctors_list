@@ -253,9 +253,10 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
           child: Align(
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1400),
+              // على الويب (Desktop) نخلي العرض أقرب لتجربة الموبايل
+              constraints: const BoxConstraints(maxWidth: 620),
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 0),
+                margin: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   boxShadow: [
