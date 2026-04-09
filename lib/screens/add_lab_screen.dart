@@ -135,9 +135,14 @@ class _AddLabScreenState extends State<AddLabScreen> {
     } catch (e) {
       debugPrint('💾 Error saving lab data: $e');
       if (mounted) {
+        // استخرج الرسالة الحقيقية من الخطأ
+        String errorMsg = e.toString();
+        if (errorMsg.contains('Exception: ')) {
+          errorMsg = errorMsg.replaceFirst('Exception: ', '');
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('خطأ في حفظ البيانات: $e'),
+            content: Text('خطأ في الحفظ: $errorMsg'),
             backgroundColor: Colors.red,
           ),
         );

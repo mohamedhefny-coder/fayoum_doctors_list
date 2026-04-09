@@ -139,10 +139,13 @@ class _LabsScreenState extends State<LabsScreen>
 
     // إذا نجح تسجيل الدخول، فتح صفحة إضافة المعمل
     if (loginSuccess == true && mounted) {
-      final result = await Navigator.push<LabModel>(
+      final result = await Navigator.push<bool>(
         context,
         MaterialPageRoute(builder: (context) => const AddLabScreen()),
       );
+
+      // تسجيل خروج المعمل بعد الانتهاء
+      await LabService().signOut();
 
       if (result == true && mounted) {
         // إعادة تحميل المعامل من قاعدة البيانات بعد الإضافة

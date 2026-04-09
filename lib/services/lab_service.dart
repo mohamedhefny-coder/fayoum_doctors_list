@@ -121,37 +121,44 @@ class LabService {
       final existingLab = await getCurrentLab();
       debugPrint('🔍 Existing lab: $existingLab');
 
-      final labData = {
-        'user_id': user.id,
+      // بناء البيانات مع حذف القيم الفارغة
+      final Map<String, dynamic> labData = {
         'name': name,
-        'address': address,
-        'phone': phone,
-        'whatsapp': whatsapp,
-        'email': email,
-        'working_hours': workingHours,
-        'offers': offers,
-        'contracts': contracts,
-        'features': features,
-        'tests': tests,
-        'latitude': latitude,
-        'longitude': longitude,
       };
+      if (address != null) labData['address'] = address;
+      if (phone != null) labData['phone'] = phone;
+      if (whatsapp != null) labData['whatsapp'] = whatsapp;
+      if (email != null) labData['email'] = email;
+      if (workingHours != null) labData['working_hours'] = workingHours;
+      if (offers != null) labData['offers'] = offers;
+      if (contracts != null) labData['contracts'] = contracts;
+      if (features != null && features.isNotEmpty) labData['features'] = features;
+      if (tests != null && tests.isNotEmpty) {
+        // تحويل Map<String, List<String>> إلى Map<String, dynamic> لضمان التوافق مع JSONB
+        labData['tests'] = tests.map((k, v) => MapEntry(k, v));
+      }
+      if (latitude != null) labData['latitude'] = latitude;
+      if (longitude != null) labData['longitude'] = longitude;
 
       if (existingLab != null) {
-        // تحديث البيانات
+        // تحديث البيانات (بدون user_id)
         debugPrint('📝 Updating existing lab...');
         await _supabase.from('labs').update(labData).eq('user_id', user.id);
         debugPrint('✅ Lab updated successfully!');
       } else {
         // إضافة بيانات جديدة
         debugPrint('📝 Inserting new lab...');
+        labData['user_id'] = user.id;
         labData['is_published'] = true;
         await _supabase.from('labs').insert(labData);
         debugPrint('✅ Lab inserted successfully!');
       }
+    } on PostgrestException catch (e) {
+      debugPrint('❌ Postgrest error: ${e.code} - ${e.message} - ${e.details}');
+      throw Exception('خطأ قاعدة البيانات: ${e.message}');
     } catch (e) {
       debugPrint('❌ Error in upsertLabData: $e');
-      throw Exception('خطأ في حفظ البيانات: $e');
+      rethrow;
     }
   }
 
