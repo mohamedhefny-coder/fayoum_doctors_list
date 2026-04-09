@@ -77,8 +77,15 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
 
   void _handleIncomingLink(Uri uri) {
     final doctorId = _extractDoctorId(uri);
-    if (doctorId == null) return;
-    _openDoctorProfile(doctorId);
+    if (doctorId != null) {
+      _openDoctorProfile(doctorId);
+      return;
+    }
+
+    final radiologyName = _extractRadiologyName(uri);
+    if (radiologyName != null) {
+      _openRadiologyCenterByName(radiologyName);
+    }
   }
 
   String? _extractDoctorId(Uri uri) {
@@ -98,6 +105,34 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
       }
       final fromQuery = uri.queryParameters['id'];
       return fromQuery?.trim().isNotEmpty == true ? fromQuery : null;
+    }
+
+    return null;
+  }
+
+  String? _extractRadiologyName(Uri uri) {
+    if (uri.scheme != 'fayoumdoctors') return null;
+
+    // Supports:
+    // - fayoumdoctors://radiology?name=...
+    // - fayoumdoctors://radiology/<name>
+    // - fayoumdoctors://app/radiology?name=...
+    final isRadiologyHost = uri.host == 'radiology';
+    final isRadiologyPath =
+        uri.pathSegments.isNotEmpty && uri.pathSegments.first == 'radiology';
+    if (!isRadiologyHost && !isRadiologyPath) return null;
+
+    final fromQuery = uri.queryParameters['name']?.trim();
+    if (fromQuery != null && fromQuery.isNotEmpty) return fromQuery;
+
+    if (isRadiologyHost && uri.pathSegments.isNotEmpty) {
+      final name = uri.pathSegments.first.trim();
+      return name.isNotEmpty ? name : null;
+    }
+
+    if (isRadiologyPath && uri.pathSegments.length > 1) {
+      final name = uri.pathSegments[1].trim();
+      return name.isNotEmpty ? name : null;
     }
 
     return null;
@@ -128,6 +163,27 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
       });
     } catch (_) {
       _showSnack('تعذر فتح صفحة الطبيب.');
+    } finally {
+      _isHandlingLink = false;
+    }
+  }
+
+  Future<void> _openRadiologyCenterByName(String name) async {
+    if (_isHandlingLink) return;
+    _isHandlingLink = true;
+
+    try {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final nav = _navigatorKey.currentState;
+        if (nav == null) return;
+        nav.push(
+          MaterialPageRoute(
+            builder: (_) => RadiologyScreen(initialCenterName: name),
+          ),
+        );
+      });
+    } catch (_) {
+      _showSnack('تعذر فتح صفحة مركز الأشعة.');
     } finally {
       _isHandlingLink = false;
     }

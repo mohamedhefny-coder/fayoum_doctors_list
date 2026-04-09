@@ -8,7 +8,9 @@ import '../services/radiology_service.dart';
 import 'radiology_login_screen.dart';
 
 class RadiologyScreen extends StatefulWidget {
-  const RadiologyScreen({super.key});
+  const RadiologyScreen({super.key, this.initialCenterName});
+
+  final String? initialCenterName;
 
   @override
   State<RadiologyScreen> createState() => _RadiologyScreenState();
@@ -17,6 +19,7 @@ class RadiologyScreen extends StatefulWidget {
 class _RadiologyScreenState extends State<RadiologyScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
+  bool _initialCenterOpened = false;
 
   final List<String> _serviceFilters = const [
     'أشعة عادية',
@@ -78,6 +81,37 @@ class _RadiologyScreenState extends State<RadiologyScreen>
       duration: const Duration(milliseconds: 1200),
     )..forward();
     _loadRemoteCenters();
+  }
+
+  void _maybeOpenInitialCenter() {
+    if (!mounted) return;
+    if (_initialCenterOpened) return;
+    if (_isLoadingRemote) return;
+    final rawName = widget.initialCenterName ?? '';
+    final target = rawName.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (target.isEmpty) return;
+
+    _initialCenterOpened = true;
+
+    final match = _allCenters.cast<_RadiologyCenter?>().firstWhere(
+      (c) {
+        final candidate =
+            (c?.name ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+        return candidate.toLowerCase() == target.toLowerCase();
+      },
+      orElse: () => null,
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (match == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لم يتم العثور على مركز الأشعة المطلوب.')),
+        );
+        return;
+      }
+      _openDetails(match);
+    });
   }
 
   Future<void> _loadRemoteCenters() async {
@@ -143,6 +177,7 @@ class _RadiologyScreenState extends State<RadiologyScreen>
       // في حالة خطأ نستمر بالبيانات المحلية
     } finally {
       if (mounted) setState(() => _isLoadingRemote = false);
+      _maybeOpenInitialCenter();
     }
   }
 
@@ -859,6 +894,15 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: _ActionBtn(
+                    icon: Icons.facebook,
+                    label: 'فيسبوك',
+                    color: Colors.blue,
+                    onTap: () => _openUrl(center.facebook),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _ActionBtn(
                     icon: Icons.location_on_rounded,
                     label: 'الموقع',
                     color: Colors.blue,
@@ -1027,6 +1071,7 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                               ],
                             ),
                           ),
+                          const SizedBox(width: 10),
                           Container(
                             padding: const EdgeInsets.symmetric(
                               horizontal: 18,
@@ -1050,15 +1095,45 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                               ),
                             ),
                           ),
+                          const SizedBox(width: 10),
+                          // آخر عنصر في RTL = أقصى اليسار
+                          GestureDetector(
+                            onTap: () {
+                              final qrData =
+                                  'fayoumdoctors://radiology?name=${Uri.encodeComponent(center.name)}';
+                              showDialog(
+                                context: context,
+                                builder: (_) =>
+                                    _QrFullDialog(center: center, qrData: qrData),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: center.color.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: center.color.withValues(alpha: 0.22),
+                                ),
+                              ),
+                              child: QrImageView(
+                                data:
+                                    'fayoumdoctors://radiology?name=${Uri.encodeComponent(center.name)}',
+                                version: QrVersions.auto,
+                                size: 52,
+                                backgroundColor: Colors.white,
+                              ),
+                            ),
+                          ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 16),
 
-                    // ── Overview ──
+                    // ── Address & Hours ──
                     _DetailBlock(
-                      title: 'نظرة عامة',
-                      icon: Icons.dashboard_customize_rounded,
+                      title: 'العنوان ومواعيد العمل',
+                      icon: Icons.location_on_rounded,
                       color: center.color,
                       children: [
                         _DetailRow(
@@ -1072,61 +1147,6 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                           text: hoursText,
                           color: center.color,
                         ),
-                        const SizedBox(height: 10),
-                        _DetailRow(
-                          icon: Icons.event_available_rounded,
-                          text: center.hasBooking
-                              ? 'الحجز متاح'
-                              : 'الحجز غير متاح',
-                          color: center.hasBooking
-                              ? Colors.green
-                              : Colors.grey,
-                        ),
-                        const SizedBox(height: 10),
-                        _DetailRow(
-                          icon: Icons.phone_rounded,
-                          text: center.phone,
-                          color: center.color,
-                          onTap: () => _makePhoneCall(center.phone),
-                        ),
-                        if (center.whatsapp.trim().isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          _DetailRow(
-                            icon: Icons.chat_bubble_rounded,
-                            text: center.whatsapp,
-                            color: const Color(0xFF25D366),
-                            onTap: () => _openWhatsApp(center.whatsapp),
-                          ),
-                        ],
-                        if (center.facebook.trim().isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          _DetailRow(
-                            icon: Icons.facebook,
-                            text: 'فتح صفحة فيسبوك',
-                            color: Colors.blue.shade700,
-                            onTap: () => _openUrl(center.facebook),
-                          ),
-                        ],
-                        if (center.locationUrl.trim().isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          _DetailRow(
-                            icon: Icons.map_rounded,
-                            text: 'فتح الموقع على الخريطة',
-                            color: center.color,
-                            onTap: () => _openUrl(center.locationUrl),
-                          ),
-                        ],
-                        if (center.email.trim().isNotEmpty) ...[
-                          const SizedBox(height: 10),
-                          _DetailRow(
-                            icon: Icons.email_rounded,
-                            text: center.email,
-                            color: center.color,
-                            onTap: () => _safeLaunch(
-                              Uri(scheme: 'mailto', path: center.email.trim()),
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                     const SizedBox(height: 16),
@@ -1235,109 +1255,147 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    // ── أطباء المركز ──
-                    if (center.doctors.isNotEmpty) ...
-                      [
-                        const SizedBox(height: 16),
-                        _DetailBlock(
-                          title: 'أطباء المركز',
-                          icon: Icons.people_rounded,
-                          color: center.color,
-                          children: [
-                            Wrap(
-                              spacing: 12,
-                              runSpacing: 12,
-                              children: center.doctors.map((doc) {
-                                final photoUrl = doc['photo_url'];
-                                final name = doc['name'] ?? '';
-                                final title = doc['title'] ?? '';
-                                return SizedBox(
-                                  width: 90,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 36,
-                                        backgroundColor: center.color
-                                            .withValues(alpha: 0.15),
-                                        backgroundImage: photoUrl != null &&
-                                                photoUrl.isNotEmpty
-                                            ? NetworkImage(photoUrl)
-                                            : null,
-                                        child: photoUrl == null ||
-                                                photoUrl.isEmpty
-                                            ? Icon(Icons.person_rounded,
-                                                size: 36,
-                                                color: center.color)
-                                            : null,
-                                      ),
 
-                                    // ── معرض الصور ──
-                                    if (center.galleryImageUrls.isNotEmpty) ...[
-                                      const SizedBox(height: 16),
-                                      _DetailBlock(
-                                        title: 'معرض الصور',
-                                        icon: Icons.photo_library_rounded,
-                                        color: center.color,
+                    // ── أطباء المركز ──
+                    if (center.doctors.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _DetailBlock(
+                        title: 'أطباء المركز',
+                        icon: Icons.people_rounded,
+                        color: center.color,
+                        children: [
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: center.doctors.map((doc) {
+                              final photoUrl = (doc['photo_url'] ?? '').trim();
+                              final name = (doc['name'] ?? '').trim();
+                              final specialty = (doc['title'] ?? '').trim();
+
+                              return Container(
+                                width: 180,
+                                constraints: const BoxConstraints(minHeight: 110),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 14,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: center.color.withValues(alpha: 0.05),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: center.color.withValues(alpha: 0.18),
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 56,
+                                      height: 56,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
+                                        color: center.color.withValues(alpha: 0.15),
+                                      ),
+                                      child: ClipOval(
+                                        child: photoUrl.isNotEmpty
+                                            ? Image.network(
+                                                photoUrl,
+                                                width: 56,
+                                                height: 56,
+                                                fit: BoxFit.cover,
+                                                filterQuality: FilterQuality.high,
+                                                errorBuilder: (_, __, ___) => Icon(
+                                                  Icons.person_rounded,
+                                                  size: 30,
+                                                  color: center.color,
+                                                ),
+                                              )
+                                            : Icon(
+                                                Icons.person_rounded,
+                                                size: 30,
+                                                color: center.color,
+                                              ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          SizedBox(
-                                            height: 110,
-                                            child: ListView.separated(
-                                              scrollDirection: Axis.horizontal,
-                                              itemCount: center.galleryImageUrls.length,
-                                              separatorBuilder: (_, __) => const SizedBox(width: 10),
-                                              itemBuilder: (context, i) {
-                                                final url = center.galleryImageUrls[i];
-                                                return ClipRRect(
-                                                  borderRadius: BorderRadius.circular(12),
-                                                  child: AspectRatio(
-                                                    aspectRatio: 1,
-                                                    child: Image.network(
-                                                      url,
-                                                      fit: BoxFit.cover,
-                                                      errorBuilder: (_, __, ___) => Container(
-                                                        color: Colors.grey.shade200,
-                                                        child: const Icon(Icons.broken_image_outlined),
-                                                      ),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
+                                          Text(
+                                            name.isEmpty ? 'طبيب' : name,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.bold,
                                             ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
                                           ),
+                                          if (specialty.isNotEmpty) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              specialty,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: Colors.grey[700],
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ],
                                         ],
                                       ),
-                                    ],
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        name,
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                          ),
+                        ],
+                      ),
+                    ],
+
+                    // ── معرض الصور ──
+                    if (center.galleryImageUrls.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _DetailBlock(
+                        title: 'معرض الصور',
+                        icon: Icons.photo_library_rounded,
+                        color: center.color,
+                        children: [
+                          SizedBox(
+                            height: 110,
+                            child: ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              itemCount: center.galleryImageUrls.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 10),
+                              itemBuilder: (context, i) {
+                                final url = center.galleryImageUrls[i];
+                                return ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: AspectRatio(
+                                    aspectRatio: 1,
+                                    child: Image.network(
+                                      url,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: Colors.grey.shade200,
+                                        child: const Icon(
+                                          Icons.broken_image_outlined,
                                         ),
-                                        textAlign: TextAlign.center,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
                                       ),
-                                      if (title.isNotEmpty)
-                                        Text(
-                                          title,
-                                          style: TextStyle(
-                                            fontSize: 11,
-                                            color: Colors.grey[600],
-                                          ),
-                                          textAlign: TextAlign.center,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                    ],
+                                    ),
                                   ),
                                 );
-                              }).toList(),
+                              },
                             ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 24),
 
                     // ── Booking button (prominent) ──
@@ -1426,89 +1484,9 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 12),
-
-                    // ── QR Code ──
-                    _QrShareCard(center: center),
-                    const SizedBox(height: 24),
                   ],
                 ),
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ====== بطاقة QR لمشاركة المركز ======
-class _QrShareCard extends StatelessWidget {
-  const _QrShareCard({required this.center});
-  final _RadiologyCenter center;
-
-  String get _qrData =>
-      'fayoumdoctors://radiology?name=${Uri.encodeComponent(center.name)}';
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => showDialog(
-        context: context,
-        builder: (_) => _QrFullDialog(center: center, qrData: _qrData),
-      ),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: center.color.withValues(alpha: 0.14),
-              blurRadius: 18,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: center.color.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: QrImageView(
-                data: _qrData,
-                version: QrVersions.auto,
-                size: 70,
-                backgroundColor: Colors.white,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'مشاركة المركز عبر QR',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: center.color,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'اضغط لعرض الكود بالحجم الكامل',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[500]),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.qr_code_scanner_rounded,
-              color: center.color.withValues(alpha: 0.6),
-              size: 28,
             ),
           ],
         ),
@@ -2429,45 +2407,36 @@ class _DetailRow extends StatelessWidget {
     required this.icon,
     required this.text,
     required this.color,
-    this.onTap,
   });
 
   final IconData icon;
   final String text;
   final Color color;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(icon, color: color, size: 18),
+    return Row(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              text,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[800],
-                fontWeight: FontWeight.w500,
-                decoration:
-                    onTap != null ? TextDecoration.underline : null,
-              ),
+          child: Icon(icon, color: color, size: 18),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[800],
+              fontWeight: FontWeight.w500,
             ),
           ),
-          if (onTap != null)
-            Icon(Icons.chevron_left_rounded, color: color, size: 20),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
