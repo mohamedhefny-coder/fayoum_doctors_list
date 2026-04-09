@@ -1,4 +1,4 @@
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -2441,11 +2441,17 @@ class _AddRadiologyCenterScreenState
     setState(() => _galleryImages.removeAt(index));
   }
 
+  // يعمل على الموبايل والويب باستخدام readAsBytes
   Widget _buildImagePreview(XFile file) {
-    if (kIsWeb) {
-      return Image.network(file.path, fit: BoxFit.cover);
-    }
-    return Image.file(File(file.path), fit: BoxFit.cover);
+    return FutureBuilder<Uint8List>(
+      future: file.readAsBytes(),
+      builder: (context, snap) {
+        if (snap.hasData) {
+          return Image.memory(snap.data!, fit: BoxFit.cover);
+        }
+        return const Center(child: CircularProgressIndicator());
+      },
+    );
   }
 
   @override
