@@ -131,13 +131,15 @@ class RadiologyService {
       if (locationUrl != null) centerData['location_url'] = locationUrl;
       if (email != null) centerData['email'] = email;
       if (workingHours != null) centerData['working_hours'] = workingHours;
-      if (services != null && services.isNotEmpty)
+      if (services != null && services.isNotEmpty) {
         centerData['services'] = services;
+      }
       if (features != null) centerData['features'] = features;
       if (discounts != null) centerData['discounts'] = discounts;
       if (contracts != null) centerData['contracts'] = contracts;
-      if (doctors != null && doctors.isNotEmpty)
+      if (doctors != null && doctors.isNotEmpty) {
         centerData['doctors'] = doctors;
+      }
       if (coverImageUrl != null) centerData['cover_image_url'] = coverImageUrl;
       if (galleryImageUrls != null && galleryImageUrls.isNotEmpty) {
         centerData['gallery_image_urls'] = galleryImageUrls;

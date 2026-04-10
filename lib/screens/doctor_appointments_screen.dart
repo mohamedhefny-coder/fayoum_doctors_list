@@ -64,15 +64,24 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen>
     return '${dd.year}-${dd.month.toString().padLeft(2, '0')}-${dd.day.toString().padLeft(2, '0')}';
   }
 
+  String _fmtTimeParts(int hour, int minute) {
+    final period = hour < 12 ? 'ص' : 'م';
+    final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+    return '${hour12.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
+  }
+
+  String _fmtTimeOfDay(TimeOfDay t) => _fmtTimeParts(t.hour, t.minute);
+
   String _fmtTime(dynamic timeValue) {
     if (timeValue == null) return '-';
+    if (timeValue is TimeOfDay) return _fmtTimeOfDay(timeValue);
     final s = timeValue.toString();
     if (s.contains(':')) {
       final parts = s.split(':');
       if (parts.length >= 2) {
-        final hh = parts[0].padLeft(2, '0');
-        final mm = parts[1].padLeft(2, '0');
-        return '$hh:$mm';
+        final hour = int.tryParse(parts[0]) ?? 0;
+        final minute = int.tryParse(parts[1]) ?? 0;
+        return _fmtTimeParts(hour, minute);
       }
     }
     return s;
@@ -222,9 +231,15 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen>
                                     context: dialogContext,
                                     initialTime: TimeOfDay.now(),
                                     builder: (context, child) {
-                                      return Directionality(
-                                        textDirection: TextDirection.rtl,
-                                        child: child!,
+                                      final mq = MediaQuery.of(context);
+                                      return MediaQuery(
+                                        data: mq.copyWith(
+                                          alwaysUse24HourFormat: false,
+                                        ),
+                                        child: Directionality(
+                                          textDirection: TextDirection.rtl,
+                                          child: child!,
+                                        ),
                                       );
                                     },
                                   );
@@ -239,7 +254,7 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen>
                                 icon: const Icon(Icons.access_time),
                                 label: Text(
                                   selectedTime != null
-                                      ? '${selectedTime!.hour.toString().padLeft(2, '0')}:${selectedTime!.minute.toString().padLeft(2, '0')}'
+                                      ? _fmtTimeOfDay(selectedTime!)
                                       : 'اختر الوقت',
                                 ),
                               ),
@@ -250,7 +265,7 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen>
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
-                              'سيتم تحديد الموعد: ${_fmtDate(currentDate)} - $customTime',
+                              'سيتم تحديد الموعد: ${_fmtDate(currentDate)} - ${_fmtTime(customTime)}',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.primary,
@@ -431,9 +446,16 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen>
                                           context: dialogContext,
                                           initialTime: TimeOfDay.now(),
                                           builder: (context, child) {
-                                            return Directionality(
-                                              textDirection: TextDirection.rtl,
-                                              child: child!,
+                                            final mq = MediaQuery.of(context);
+                                            return MediaQuery(
+                                              data: mq.copyWith(
+                                                alwaysUse24HourFormat: false,
+                                              ),
+                                              child: Directionality(
+                                                textDirection:
+                                                    TextDirection.rtl,
+                                                child: child!,
+                                              ),
                                             );
                                           },
                                         );
@@ -446,7 +468,7 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen>
                                 icon: const Icon(Icons.access_time),
                                 label: Text(
                                   suggestedTime != null
-                                      ? '${suggestedTime!.hour.toString().padLeft(2, '0')}:${suggestedTime!.minute.toString().padLeft(2, '0')}'
+                                      ? _fmtTimeOfDay(suggestedTime!)
                                       : 'الوقت',
                                 ),
                               ),
@@ -457,7 +479,7 @@ class _DoctorAppointmentsScreenState extends State<DoctorAppointmentsScreen>
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
-                              'الموعد البديل: ${_fmtDate(suggestedDate)} - ${suggestedTime!.hour.toString().padLeft(2, '0')}:${suggestedTime!.minute.toString().padLeft(2, '0')}',
+                              'الموعد البديل: ${_fmtDate(suggestedDate)} - ${_fmtTimeOfDay(suggestedTime!)}',
                               style: TextStyle(
                                 fontSize: 12,
                                 color: AppColors.primary,

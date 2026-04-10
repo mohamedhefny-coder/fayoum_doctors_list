@@ -129,15 +129,24 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen> {
     return '${dd.year}-${dd.month.toString().padLeft(2, '0')}-${dd.day.toString().padLeft(2, '0')}';
   }
 
+  String _fmtTimeParts(int hour, int minute) {
+    final period = hour < 12 ? 'ص' : 'م';
+    final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+    return '${hour12.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
+  }
+
   String _fmtTime(dynamic timeValue) {
     if (timeValue == null) return '-';
+    if (timeValue is TimeOfDay) {
+      return _fmtTimeParts(timeValue.hour, timeValue.minute);
+    }
     final s = timeValue.toString();
     if (s.contains(':')) {
       final parts = s.split(':');
       if (parts.length >= 2) {
-        final hh = parts[0].padLeft(2, '0');
-        final mm = parts[1].padLeft(2, '0');
-        return '$hh:$mm';
+        final hour = int.tryParse(parts[0]) ?? 0;
+        final minute = int.tryParse(parts[1]) ?? 0;
+        return _fmtTimeParts(hour, minute);
       }
     }
     return s;
@@ -168,10 +177,9 @@ class _MyAppointmentsScreenState extends State<MyAppointmentsScreen> {
       final bytes = await picked.readAsBytes();
       if (bytes.isEmpty) return;
       final dot = picked.name.lastIndexOf('.');
-      final ext =
-          (dot > 0 && dot < picked.name.length - 1)
-              ? picked.name.substring(dot + 1).toLowerCase()
-              : 'jpg';
+      final ext = (dot > 0 && dot < picked.name.length - 1)
+          ? picked.name.substring(dot + 1).toLowerCase()
+          : 'jpg';
       final tmpPath =
           '${Directory.systemTemp.path}/receipt_${DateTime.now().millisecondsSinceEpoch}.$ext';
       receiptFile = File(tmpPath);

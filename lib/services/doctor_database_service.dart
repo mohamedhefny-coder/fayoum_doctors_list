@@ -213,6 +213,7 @@ class DoctorDatabaseService {
     String? emergencyPhone,
     bool? homeVisit,
     bool? isBookingEnabled,
+    int? patientsPerHour,
     bool? isPayAtBookingEnabled,
     bool? isCancelBookingEnabledAtPayment,
     String? paymentMethod,
@@ -277,6 +278,9 @@ class DoctorDatabaseService {
       if (isBookingEnabled != null) {
         data['is_booking_enabled'] = isBookingEnabled;
       }
+      if (patientsPerHour != null) {
+        data['patients_per_hour'] = patientsPerHour;
+      }
       if (isPayAtBookingEnabled != null) {
         data['is_pay_at_booking_enabled'] = isPayAtBookingEnabled;
       }
@@ -318,6 +322,10 @@ class DoctorDatabaseService {
 
         if (_looksLikeMissingColumn(msg, 'is_booking_enabled')) {
           retryPayload.remove('is_booking_enabled');
+          shouldRetry = true;
+        }
+        if (_looksLikeMissingColumn(msg, 'patients_per_hour')) {
+          retryPayload.remove('patients_per_hour');
           shouldRetry = true;
         }
         if (_looksLikeMissingColumn(msg, 'is_pay_at_booking_enabled')) {
@@ -383,6 +391,38 @@ class DoctorDatabaseService {
     } catch (e) {
       rethrow;
     }
+  }
+
+  Future<Map<int, int>> getAppointmentHourCounts({
+    required String doctorId,
+    required DateTime date,
+  }) async {
+    final dateOnly = DateTime(date.year, date.month, date.day);
+    final dateStr =
+        '${dateOnly.year.toString().padLeft(4, '0')}-${dateOnly.month.toString().padLeft(2, '0')}-${dateOnly.day.toString().padLeft(2, '0')}';
+
+    final rows =
+        await _client.rpc(
+              'get_appointment_hour_counts',
+              params: {'p_doctor_id': doctorId, 'p_date': dateStr},
+            )
+            as List<dynamic>;
+
+    final out = <int, int>{};
+    for (final r in rows) {
+      if (r is! Map) continue;
+      final hourRaw = r['hour'];
+      final countRaw = r['booked_count'];
+      final hour = hourRaw is num
+          ? hourRaw.toInt()
+          : int.tryParse(hourRaw?.toString() ?? '');
+      final count = countRaw is num
+          ? countRaw.toInt()
+          : int.tryParse(countRaw?.toString() ?? '');
+      if (hour == null || count == null) continue;
+      out[hour] = count;
+    }
+    return out;
   }
 
   Future<List<DoctorWorkingHours>> getDoctorWorkingHours({

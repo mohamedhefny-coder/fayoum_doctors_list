@@ -118,10 +118,14 @@ class DoctorSummaryCard extends StatelessWidget {
                     ],
                   ],
                 ),
-                if (doctor.title != null) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    doctor.title!,
+                const SizedBox(height: 4),
+                Visibility(
+                  visible: (doctor.title ?? '').trim().isNotEmpty,
+                  maintainAnimation: true,
+                  maintainSize: true,
+                  maintainState: true,
+                  child: Text(
+                    (doctor.title ?? '').trim(),
                     style: const TextStyle(
                       fontSize: 13,
                       color: Color(0xFF666666),
@@ -129,7 +133,7 @@ class DoctorSummaryCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                ],
+                ),
                 const SizedBox(height: 6),
                 Text(
                   doctor.specialization,

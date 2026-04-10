@@ -35,8 +35,7 @@ class _WorkingHoursScheduleScreenState
   @override
   void initState() {
     super.initState();
-    _workingHoursNotesController.text =
-        widget.doctor.workingHoursNotes ?? '';
+    _workingHoursNotesController.text = widget.doctor.workingHoursNotes ?? '';
     _loadWorkingHours();
   }
 
@@ -48,8 +47,9 @@ class _WorkingHoursScheduleScreenState
 
   Future<void> _loadWorkingHours() async {
     try {
-      final rows =
-          await _dbService.getDoctorWorkingHours(doctorId: widget.doctor.id);
+      final rows = await _dbService.getDoctorWorkingHours(
+        doctorId: widget.doctor.id,
+      );
       for (final row in rows) {
         if (row.dayOfWeek >= 0 && row.dayOfWeek < 7) {
           setState(() {
@@ -61,9 +61,9 @@ class _WorkingHoursScheduleScreenState
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطأ في تحميل المواعيد: $e')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('خطأ في تحميل المواعيد: $e')));
       }
     }
   }
@@ -173,6 +173,16 @@ class _WorkingHoursScheduleScreenState
                     context: context,
                     initialTime:
                         _dayStart[i] ?? const TimeOfDay(hour: 9, minute: 0),
+                    builder: (context, child) {
+                      final mq = MediaQuery.of(context);
+                      return MediaQuery(
+                        data: mq.copyWith(alwaysUse24HourFormat: false),
+                        child: Directionality(
+                          textDirection: TextDirection.rtl,
+                          child: child!,
+                        ),
+                      );
+                    },
                   );
                   if (picked == null) return;
                   setState(() => _dayStart[i] = picked);
@@ -183,22 +193,36 @@ class _WorkingHoursScheduleScreenState
                     context: context,
                     initialTime:
                         _dayEnd[i] ?? const TimeOfDay(hour: 17, minute: 0),
+                    builder: (context, child) {
+                      final mq = MediaQuery.of(context);
+                      return MediaQuery(
+                        data: mq.copyWith(alwaysUse24HourFormat: false),
+                        child: Directionality(
+                          textDirection: TextDirection.rtl,
+                          child: child!,
+                        ),
+                      );
+                    },
                   );
                   if (picked == null) return;
                   setState(() => _dayEnd[i] = picked);
                 }
 
                 final btnStyle = OutlinedButton.styleFrom(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
                   minimumSize: const Size(0, 32),
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 );
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(8),
@@ -227,8 +251,7 @@ class _WorkingHoursScheduleScreenState
                           });
                         },
                         activeThumbColor: const Color(0xFF246BCE),
-                        materialTapTargetSize:
-                            MaterialTapTargetSize.shrinkWrap,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                       const SizedBox(width: 8),
                       OutlinedButton(
@@ -248,7 +271,10 @@ class _WorkingHoursScheduleScreenState
               }),
               const SizedBox(height: 16),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFF246BCE),
                   borderRadius: BorderRadius.circular(8),

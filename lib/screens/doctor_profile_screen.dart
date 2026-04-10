@@ -138,8 +138,10 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       final xfile = await _picker.pickVideo(source: ImageSource.gallery);
       if (xfile == null) return;
 
-      final file =
-          await _xFileToLocalTempFile(xfile, prefix: 'intro_video_${doctor.id}');
+      final file = await _xFileToLocalTempFile(
+        xfile,
+        prefix: 'intro_video_${doctor.id}',
+      );
       if (file == null) return;
       final lower = xfile.name.toLowerCase();
       final allowed =
@@ -306,7 +308,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     final doctorId = user?.id ?? '';
     if (doctorId.isEmpty) return;
 
-    final channel = Supabase.instance.client.channel('doctor_profile_$doctorId');
+    final channel = Supabase.instance.client.channel(
+      'doctor_profile_$doctorId',
+    );
     channel
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
@@ -529,7 +533,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('لم يتم قص الصورة (تم الإلغاء أو تعذر فتح أداة القص).'),
+            content: Text(
+              'لم يتم قص الصورة (تم الإلغاء أو تعذر فتح أداة القص).',
+            ),
             backgroundColor: Colors.orange,
           ),
         );
@@ -630,8 +636,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       return;
     }
 
-    if (_emergency24Enabled &&
-        _emergencyPhoneController.text.trim().isEmpty) {
+    if (_emergency24Enabled && _emergencyPhoneController.text.trim().isEmpty) {
       messenger.showSnackBar(
         const SnackBar(
           content: Text('⚠️ رقم الطوارئ مطلوب عند تفعيل طوارئ 24 ساعة'),
@@ -772,8 +777,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         geoLocation: _geoLocationController.text,
         workingHoursNotes: _workingHoursNotesController.text,
         emergency24h: _emergency24Enabled,
-        emergencyPhone:
-            _emergency24Enabled ? _emergencyPhoneController.text : null,
+        emergencyPhone: _emergency24Enabled
+            ? _emergencyPhoneController.text
+            : null,
         homeVisit: _homeVisitEnabled,
         isBookingEnabled: _isBookingEnabled,
       );
@@ -1413,12 +1419,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                 ),
                 // المحتوى
                 Padding(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    _isEditing ? 16 : 0,
-                    16,
-                    16,
-                  ),
+                  padding: EdgeInsets.fromLTRB(16, _isEditing ? 16 : 0, 16, 16),
                   child: _isEditing
                       ? _buildEditForm(doctor)
                       : _buildViewMode(doctor),
@@ -1675,9 +1676,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           ),
           const SizedBox(height: 24),
         ],
-        if (!doctor.isPublished) ...[
-          const SizedBox(height: 24),
-        ],
+        if (!doctor.isPublished) ...[const SizedBox(height: 24)],
         // قسم الحجز عبر التطبيق
         Container(
           padding: const EdgeInsets.all(16),
@@ -1815,6 +1814,91 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                   children: [
                     const Expanded(
                       child: Text(
+                        'عدد المرضى في الساعة',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                    DropdownButtonHideUnderline(
+                      child: DropdownButton<int>(
+                        value: (doctor.patientsPerHour <= 0)
+                            ? 1
+                            : (doctor.patientsPerHour > 20)
+                            ? 20
+                            : doctor.patientsPerHour,
+                        items: List.generate(
+                          20,
+                          (i) => DropdownMenuItem<int>(
+                            value: i + 1,
+                            child: Text('${i + 1}'),
+                          ),
+                        ),
+                        onChanged: (value) async {
+                          if (value == null) return;
+                          try {
+                            await _dbService.updateDoctorProfile(
+                              doctorId: doctor.id,
+                              patientsPerHour: value,
+                            );
+
+                            if (mounted) {
+                              setState(() {
+                                _doctorFuture = _dbService
+                                    .ensureCurrentDoctorProfile();
+                              });
+
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    '✓ تم تحديث عدد المرضى في الساعة',
+                                  ),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('خطأ في التحديث: $e'),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'يتم تقسيم اليوم إلى ساعات، ويُسمح بعدد حجوزات لكل ساعة حسب هذا الإعداد.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey[600],
+                  height: 1.3,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
                         'الدفع عند الحجز',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
@@ -1861,8 +1945,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                         }
                       },
                       activeThumbColor: const Color(0xFF16A34A),
-                      materialTapTargetSize:
-                          MaterialTapTargetSize.shrinkWrap,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ],
                 ),
@@ -2421,8 +2504,11 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                         ),
                         borderRadius: BorderRadius.circular(16),
                       ),
-                      child:
-                          Icon(Icons.edit_document, color: primary, size: 32),
+                      child: Icon(
+                        Icons.edit_document,
+                        color: primary,
+                        size: 32,
+                      ),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
@@ -2466,8 +2552,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                         ),
                       ],
                       border: Border.all(
-                        color:
-                            const Color(0xFFF59E0B).withValues(alpha: 0.35),
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.35),
                         width: 1.2,
                       ),
                     ),
@@ -2479,8 +2564,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                             Container(
                               padding: const EdgeInsets.all(10),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF59E0B)
-                                    .withValues(alpha: 0.12),
+                                color: const Color(
+                                  0xFFF59E0B,
+                                ).withValues(alpha: 0.12),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Icon(
@@ -2518,16 +2604,14 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                         if (!doctor.publishRequested)
                           ElevatedButton.icon(
                             onPressed: () async {
-                              final messenger =
-                                  ScaffoldMessenger.of(context);
+                              final messenger = ScaffoldMessenger.of(context);
                               try {
                                 await _dbService
                                     .requestPublishForCurrentDoctor();
                                 if (!mounted) return;
                                 messenger.showSnackBar(
                                   const SnackBar(
-                                    content:
-                                        Text('تم إرسال طلب النشر بنجاح'),
+                                    content: Text('تم إرسال طلب النشر بنجاح'),
                                     backgroundColor: Colors.green,
                                   ),
                                 );
@@ -2539,8 +2623,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                                 if (!mounted) return;
                                 messenger.showSnackBar(
                                   SnackBar(
-                                    content: Text(
-                                        'تعذر إرسال طلب النشر: $e'),
+                                    content: Text('تعذر إرسال طلب النشر: $e'),
                                     backgroundColor: Colors.red,
                                   ),
                                 );
@@ -2551,8 +2634,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFFF59E0B),
                               foregroundColor: Colors.white,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 12),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -2570,10 +2652,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                             label: const Text('تحديث الحالة'),
                             style: OutlinedButton.styleFrom(
                               foregroundColor: const Color(0xFF334155),
-                              side: const BorderSide(
-                                  color: Color(0xFFCBD5E1)),
-                              padding: const EdgeInsets.symmetric(
-                                  vertical: 12),
+                              side: const BorderSide(color: Color(0xFFCBD5E1)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12),
                               ),
@@ -2881,16 +2961,14 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            const Color(0xFFEF4444).withValues(alpha: 0.25),
+                        color: const Color(0xFFEF4444).withValues(alpha: 0.25),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
                     ],
                   ),
                   child: SwitchListTile.adaptive(
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                     title: const Text(
                       'طوارئ 24 ساعة',
                       maxLines: 1,
@@ -2903,8 +2981,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                     value: _emergency24Enabled,
                     activeTrackColor: Colors.white.withValues(alpha: 0.5),
                     inactiveThumbColor: Colors.white,
-                    inactiveTrackColor:
-                      Colors.white.withValues(alpha: 0.2),
+                    inactiveTrackColor: Colors.white.withValues(alpha: 0.2),
                     onChanged: (v) {
                       setState(() {
                         _emergency24Enabled = v;
@@ -2938,16 +3015,14 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
-                        color:
-                            const Color(0xFF16A34A).withValues(alpha: 0.25),
+                        color: const Color(0xFF16A34A).withValues(alpha: 0.25),
                         blurRadius: 10,
                         offset: const Offset(0, 4),
                       ),
                     ],
                   ),
                   child: SwitchListTile.adaptive(
-                    contentPadding:
-                        const EdgeInsets.symmetric(horizontal: 16),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                     title: const Text(
                       'زيارة منزلية',
                       maxLines: 1,
@@ -2960,8 +3035,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                     value: _homeVisitEnabled,
                     activeTrackColor: Colors.white.withValues(alpha: 0.5),
                     inactiveThumbColor: Colors.white,
-                    inactiveTrackColor:
-                      Colors.white.withValues(alpha: 0.2),
+                    inactiveTrackColor: Colors.white.withValues(alpha: 0.2),
                     onChanged: (v) {
                       setState(() {
                         _homeVisitEnabled = v;
@@ -3621,9 +3695,15 @@ class _DoctorAppointmentsPanelState extends State<_DoctorAppointmentsPanel>
                               context: dialogContext,
                               initialTime: TimeOfDay.now(),
                               builder: (context, child) {
-                                return Directionality(
-                                  textDirection: TextDirection.rtl,
-                                  child: child!,
+                                final mq = MediaQuery.of(context);
+                                return MediaQuery(
+                                  data: mq.copyWith(
+                                    alwaysUse24HourFormat: false,
+                                  ),
+                                  child: Directionality(
+                                    textDirection: TextDirection.rtl,
+                                    child: child!,
+                                  ),
                                 );
                               },
                             );
@@ -3636,7 +3716,7 @@ class _DoctorAppointmentsPanelState extends State<_DoctorAppointmentsPanel>
                           icon: const Icon(Icons.access_time),
                           label: Text(
                             suggestedTime != null
-                                ? '${suggestedTime!.hour.toString().padLeft(2, '0')}:${suggestedTime!.minute.toString().padLeft(2, '0')}'
+                                ? _formatTime(suggestedTime)
                                 : 'اختر الوقت',
                           ),
                         ),
@@ -3802,9 +3882,16 @@ class _DoctorAppointmentsPanelState extends State<_DoctorAppointmentsPanel>
                                           context: dialogContext,
                                           initialTime: TimeOfDay.now(),
                                           builder: (context, child) {
-                                            return Directionality(
-                                              textDirection: TextDirection.rtl,
-                                              child: child!,
+                                            final mq = MediaQuery.of(context);
+                                            return MediaQuery(
+                                              data: mq.copyWith(
+                                                alwaysUse24HourFormat: false,
+                                              ),
+                                              child: Directionality(
+                                                textDirection:
+                                                    TextDirection.rtl,
+                                                child: child!,
+                                              ),
                                             );
                                           },
                                         );
@@ -3817,7 +3904,7 @@ class _DoctorAppointmentsPanelState extends State<_DoctorAppointmentsPanel>
                                 icon: const Icon(Icons.access_time),
                                 label: Text(
                                   suggestedTime != null
-                                      ? '${suggestedTime!.hour.toString().padLeft(2, '0')}:${suggestedTime!.minute.toString().padLeft(2, '0')}'
+                                      ? _formatTime(suggestedTime)
                                       : 'الوقت',
                                 ),
                               ),
@@ -3828,7 +3915,7 @@ class _DoctorAppointmentsPanelState extends State<_DoctorAppointmentsPanel>
                           Padding(
                             padding: const EdgeInsets.only(top: 8),
                             child: Text(
-                              'الموعد البديل: ${_formatDate(suggestedDate)} - ${suggestedTime!.hour.toString().padLeft(2, '0')}:${suggestedTime!.minute.toString().padLeft(2, '0')}',
+                              'الموعد البديل: ${_formatDate(suggestedDate)} - ${_formatTime(suggestedTime)}',
                               style: const TextStyle(
                                 fontSize: 12,
                                 color: Colors.teal,
@@ -3902,13 +3989,22 @@ class _DoctorAppointmentsPanelState extends State<_DoctorAppointmentsPanel>
 
   String _formatTime(dynamic value) {
     if (value == null) return '-';
+    if (value is TimeOfDay) {
+      return _formatTimeParts(value.hour, value.minute);
+    }
     final raw = value.toString();
     if (!raw.contains(':')) return raw;
     final parts = raw.split(':');
     if (parts.length < 2) return raw;
-    final hh = parts[0].padLeft(2, '0');
-    final mm = parts[1].padLeft(2, '0');
-    return '$hh:$mm';
+    final hour = int.tryParse(parts[0]) ?? 0;
+    final minute = int.tryParse(parts[1]) ?? 0;
+    return _formatTimeParts(hour, minute);
+  }
+
+  String _formatTimeParts(int hour, int minute) {
+    final period = hour < 12 ? 'ص' : 'م';
+    final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+    return '${hour12.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
   }
 
   Widget _buildTable(

@@ -30,6 +30,12 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
   double _userRating = 0;
   final GlobalKey _qrKey = GlobalKey();
 
+  String _fmtHourLabel12(int hour, {int minute = 0}) {
+    final period = hour < 12 ? 'ص' : 'م';
+    final hour12 = hour % 12 == 0 ? 12 : hour % 12;
+    return '${hour12.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')} $period';
+  }
+
   String _doctorShareLink() {
     return buildPublicDoctorUrl(doctorId: widget.doctor.id).toString();
   }
@@ -55,7 +61,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
       backgroundColor: Colors.white,
       builder: (context) {
         final width = MediaQuery.of(context).size.width;
-        final qrSize = (width * 0.7).clamp(240.0, 320.0);
+        final qrSize = (width * 0.82).clamp(300.0, 460.0);
         return Directionality(
           textDirection: TextDirection.rtl,
           child: Padding(
@@ -69,10 +75,14 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                 ),
                 const SizedBox(height: 12),
                 Container(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF8FAFC),
-                    borderRadius: BorderRadius.circular(16),
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: const Color(0xFFE2E8F0),
+                      width: 1.2,
+                    ),
                   ),
                   child: RepaintBoundary(
                     key: _qrKey,
@@ -80,8 +90,15 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                       data: link,
                       size: qrSize,
                       backgroundColor: Colors.white,
+                      version: QrVersions.auto,
+                      padding: const EdgeInsets.all(10),
                     ),
                   ),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'امسح الكود لفتح نفس صفحة الطبيب',
+                  style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
                 ),
                 const SizedBox(height: 16),
                 SizedBox(
@@ -99,16 +116,13 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                         return;
                       }
 
-                      await Share.shareXFiles(
-                        [
-                          XFile.fromData(
-                            bytes,
-                            name: 'doctor_qr.png',
-                            mimeType: 'image/png',
-                          ),
-                        ],
-                        text: 'كود QR لصفحة الطبيب',
-                      );
+                      await Share.shareXFiles([
+                        XFile.fromData(
+                          bytes,
+                          name: 'doctor_qr.png',
+                          mimeType: 'image/png',
+                        ),
+                      ], text: 'صفحة الطبيب: $link');
                     },
                     icon: const Icon(Icons.qr_code_2, size: 28),
                     label: const Text('مشاركة كود QR'),
@@ -1419,8 +1433,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                                     Text(
                                       widget.doctor.isBookingEnabled
                                           ? 'خطوات سريعة داخل التطبيق'
- 
-                                        : 'جرّب التواصل هاتفياً أو واتساب',
+                                          : 'جرّب التواصل هاتفياً أو واتساب',
                                       style: TextStyle(
                                         color: Colors.white.withValues(
                                           alpha: 0.90,
@@ -1924,20 +1937,63 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
     BuildContext context,
     DoctorDatabaseService db,
   ) async {
-    final pageContext = this.context;
-    final messenger = ScaffoldMessenger.of(pageContext);
     final nameController = TextEditingController();
     final phoneController = TextEditingController();
 
+    late final BuildContext pageContext;
+    late final ScaffoldMessengerState messenger;
+    late final List<DoctorWorkingHours> workingHours;
+
     bool isLoading = false;
     DateTime selectedDate = DateUtils.dateOnly(DateTime.now());
+    int? selectedHour;
+    bool availabilityLoading = false;
+    String? availabilityError;
+    bool availabilityLoaded = false;
+    Map<int, int> bookedCountsByHour = const {};
 
     String fmtDate(DateTime d) =>
         '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
     void unfocusKeyboard() => FocusManager.instance.primaryFocus?.unfocus();
 
+    int dayOfWeekForDb(DateTime date) {
+      // DateTime.weekday: Mon=1 .. Sun=7
+      // DB: Sat=0, Sun=1, Mon=2, Tue=3, Wed=4, Thu=5, Fri=6
+      final wd = date.weekday;
+      if (wd == DateTime.saturday) return 0;
+      if (wd == DateTime.sunday) return 1;
+      return wd + 1;
+    }
+
+    List<int> hoursForSelectedDate(DateTime date) {
+      final dbDow = dayOfWeekForDb(date);
+      DoctorWorkingHours? entry;
+      for (final e in workingHours) {
+        if (e.dayOfWeek == dbDow) {
+          entry = e;
+          break;
+        }
+      }
+
+      if (entry == null || !entry.isEnabled) return const <int>[];
+      final start = entry.startTime;
+      final end = entry.endTime;
+      if (start == null || end == null) return const <int>[];
+
+      final startHour = start.hour;
+      final endHour = end.hour;
+      if (endHour <= startHour) return const <int>[];
+
+      return [for (var h = startHour; h < endHour; h++) h];
+    }
+
     try {
+      workingHours = await db.getDoctorWorkingHours(doctorId: widget.doctor.id);
+      pageContext = this.context;
+      if (!pageContext.mounted) return;
+      messenger = ScaffoldMessenger.of(pageContext);
+
       await showModalBottomSheet<void>(
         context: pageContext,
         isScrollControlled: true,
@@ -1945,6 +2001,44 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
         builder: (sheetContext) {
           return StatefulBuilder(
             builder: (sheetContext, setSheetState) {
+              Future<void> refreshAvailability() async {
+                final hours = hoursForSelectedDate(selectedDate);
+                if (hours.isEmpty) {
+                  setSheetState(() {
+                    bookedCountsByHour = const {};
+                    availabilityError = null;
+                    availabilityLoading = false;
+                    availabilityLoaded = true;
+                  });
+                  return;
+                }
+
+                setSheetState(() {
+                  availabilityLoading = true;
+                  availabilityError = null;
+                  availabilityLoaded = false;
+                });
+
+                try {
+                  final counts = await db.getAppointmentHourCounts(
+                    doctorId: widget.doctor.id,
+                    date: selectedDate,
+                  );
+                  setSheetState(() {
+                    bookedCountsByHour = counts;
+                    availabilityLoading = false;
+                    availabilityLoaded = true;
+                  });
+                } catch (e) {
+                  setSheetState(() {
+                    availabilityLoading = false;
+                    availabilityError = e.toString();
+                    bookedCountsByHour = const {};
+                    availabilityLoaded = true;
+                  });
+                }
+              }
+
               Future<void> pickDate() async {
                 unfocusKeyboard();
                 final today = DateUtils.dateOnly(DateTime.now());
@@ -1960,7 +2054,14 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                   lastDate: lastDate,
                 );
                 if (picked == null) return;
-                setSheetState(() => selectedDate = DateUtils.dateOnly(picked));
+                setSheetState(() {
+                  selectedDate = DateUtils.dateOnly(picked);
+                  selectedHour = null;
+                  availabilityLoaded = false;
+                  bookedCountsByHour = const {};
+                  availabilityError = null;
+                });
+                await refreshAvailability();
               }
 
               Future<void> submit() async {
@@ -1979,15 +2080,54 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                   return;
                 }
 
+                final hours = hoursForSelectedDate(selectedDate);
+                if (hours.isNotEmpty) {
+                  final cap = widget.doctor.patientsPerHour <= 0
+                      ? 1
+                      : widget.doctor.patientsPerHour;
+                  final allFull = hours.every((h) {
+                    final booked = bookedCountsByHour[h] ?? 0;
+                    return booked >= cap;
+                  });
+
+                  if (!allFull && selectedHour == null) {
+                    messenger.hideCurrentSnackBar();
+                    messenger.showSnackBar(
+                      const SnackBar(
+                        content: Text('يرجى اختيار الساعة.'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
+                  }
+                }
+
                 setSheetState(() => isLoading = true);
                 try {
-                  // إرسال الموعد بالتاريخ فقط (بدون وقت محدد)
+                  final hours = hoursForSelectedDate(selectedDate);
+                  final cap = widget.doctor.patientsPerHour <= 0
+                      ? 1
+                      : widget.doctor.patientsPerHour;
+                  final allFull =
+                      hours.isNotEmpty &&
+                      hours.every((h) {
+                        final booked = bookedCountsByHour[h] ?? 0;
+                        return booked >= cap;
+                      });
+
+                  final hourToBook = allFull
+                      ? (hours.isNotEmpty ? hours.first : 0)
+                      : (selectedHour ?? 0);
+
                   await db.createAppointment(
                     doctorId: widget.doctor.id,
                     patientName: name,
                     patientPhone: phone,
                     appointmentDate: selectedDate,
-                    appointmentTime: const TimeOfDay(hour: 0, minute: 0),
+                    appointmentTime: TimeOfDay(hour: hourToBook, minute: 0),
+                    notes: allFull
+                        ? 'طلب إضافة موعد (جميع الساعات ممتلئة)'
+                        : null,
                   );
 
                   if (sheetContext.mounted) {
@@ -2163,6 +2303,161 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                               minimumSize: const Size(double.infinity, 48),
                             ),
                           ),
+                          const SizedBox(height: 12),
+                          Builder(
+                            builder: (context) {
+                              final hours = hoursForSelectedDate(selectedDate);
+                              final cap = widget.doctor.patientsPerHour <= 0
+                                  ? 1
+                                  : widget.doctor.patientsPerHour;
+                              final allFull =
+                                  hours.isNotEmpty &&
+                                  hours.every((h) {
+                                    final booked = bookedCountsByHour[h] ?? 0;
+                                    return booked >= cap;
+                                  });
+
+                              if (hours.isEmpty) {
+                                return Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF8FAFC),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: const Color(0xFFE2E8F0),
+                                    ),
+                                  ),
+                                  child: const Text(
+                                    'لا توجد ساعات عمل متاحة لهذا اليوم.',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Color(0xFF64748B),
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                );
+                              }
+
+                              if (!availabilityLoading &&
+                                  !availabilityLoaded &&
+                                  availabilityError == null) {
+                                WidgetsBinding.instance.addPostFrameCallback((
+                                  _,
+                                ) {
+                                  if (!availabilityLoading) {
+                                    refreshAvailability();
+                                  }
+                                });
+                              }
+
+                              if (availabilityLoading) {
+                                return const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.only(top: 6),
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                );
+                              }
+
+                              if (availabilityError != null) {
+                                return Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.red.withValues(alpha: 0.2),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'تعذر تحميل المواعيد المتاحة: $availabilityError',
+                                    style: const TextStyle(
+                                      color: Colors.red,
+                                      fontSize: 12,
+                                      height: 1.3,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                );
+                              }
+
+                              if (allFull) {
+                                return Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF8E1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: const Color(0xFFFFE082),
+                                      width: 1.2,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      const Text(
+                                        'كل الساعات ممتلئة لهذا اليوم.',
+                                        style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color: Color(0xFFE65100),
+                                        ),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'اختر الساعة:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      for (final h in hours)
+                                        ChoiceChip(
+                                          label: Text(_fmtHourLabel12(h)),
+                                          selected: selectedHour == h,
+                                          onSelected:
+                                              (bookedCountsByHour[h] ?? 0) >=
+                                                  cap
+                                              ? null
+                                              : (v) {
+                                                  setSheetState(() {
+                                                    selectedHour = v ? h : null;
+                                                  });
+                                                },
+                                          selectedColor: widget.cardColor
+                                              .withValues(alpha: 0.18),
+                                          disabledColor: const Color(
+                                            0xFFE2E8F0,
+                                          ),
+                                          labelStyle: TextStyle(
+                                            color:
+                                                (bookedCountsByHour[h] ?? 0) >=
+                                                    cap
+                                                ? const Color(0xFF94A3B8)
+                                                : const Color(0xFF0F172A),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
                           const SizedBox(height: 14),
                           SizedBox(
                             width: double.infinity,
@@ -2187,11 +2482,34 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                                         color: Colors.white,
                                       ),
                                     )
-                                  : const Text(
-                                      'إرسال الطلب',
-                                      style: TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
+                                  : Builder(
+                                      builder: (context) {
+                                        final hours = hoursForSelectedDate(
+                                          selectedDate,
+                                        );
+                                        final cap =
+                                            widget.doctor.patientsPerHour <= 0
+                                            ? 1
+                                            : widget.doctor.patientsPerHour;
+                                        final isAllFull =
+                                            availabilityLoaded &&
+                                            availabilityError == null &&
+                                            hours.isNotEmpty &&
+                                            hours.every((h) {
+                                              final booked =
+                                                  bookedCountsByHour[h] ?? 0;
+                                              return booked >= cap;
+                                            });
+
+                                        return Text(
+                                          isAllFull
+                                              ? 'طلب إضافة موعد'
+                                              : 'إرسال الطلب',
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        );
+                                      },
                                     ),
                             ),
                           ),

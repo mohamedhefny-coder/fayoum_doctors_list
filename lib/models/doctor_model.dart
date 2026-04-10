@@ -30,6 +30,7 @@ class Doctor {
   final String? emergencyPhone;
   final bool homeVisit;
   final bool isBookingEnabled;
+  final int patientsPerHour;
   final bool isPayAtBookingEnabled;
   final bool isCancelBookingEnabledAtPayment;
   final String? paymentMethod;
@@ -72,6 +73,7 @@ class Doctor {
     this.emergencyPhone,
     this.homeVisit = false,
     this.isBookingEnabled = true,
+    this.patientsPerHour = 1,
     this.isPayAtBookingEnabled = false,
     this.isCancelBookingEnabledAtPayment = false,
     this.paymentMethod,
@@ -182,6 +184,7 @@ class Doctor {
       emergencyPhone: readOptionalString('emergency_phone'),
       homeVisit: readBool('home_visit', fallback: false),
       isBookingEnabled: readBool('is_booking_enabled', fallback: true),
+      patientsPerHour: readInt('patients_per_hour', fallback: 1),
       isPayAtBookingEnabled: readBool(
         'is_pay_at_booking_enabled',
         fallback: false,
@@ -235,6 +238,7 @@ class Doctor {
     'emergency_phone': emergencyPhone,
     'home_visit': homeVisit,
     'is_booking_enabled': isBookingEnabled,
+    'patients_per_hour': patientsPerHour,
     'is_pay_at_booking_enabled': isPayAtBookingEnabled,
     'is_cancel_booking_enabled_at_payment': isCancelBookingEnabledAtPayment,
     'payment_method': paymentMethod,

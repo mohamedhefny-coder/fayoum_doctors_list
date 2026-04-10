@@ -2327,7 +2327,7 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
     }
 
     return SizedBox(
-      height: 230,
+      height: 200,
       child: PageView.builder(
         controller: _controller,
         onPageChanged: (_) => _scheduleNextAdvance(),
@@ -2346,14 +2346,19 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
                 final page =
                     _controller.page ?? _controller.initialPage.toDouble();
                 final delta = (page - index).abs();
-                scale = (1 - (delta * 0.14)).clamp(0.88, 1.0);
+                scale = (1 - (delta * 0.12)).clamp(0.90, 1.0);
               }
-              return Center(
-                child: Transform.scale(scale: scale, child: child),
+              return Align(
+                alignment: Alignment.bottomCenter,
+                child: Transform.scale(
+                  alignment: Alignment.bottomCenter,
+                  scale: scale,
+                  child: child,
+                ),
               );
             },
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               child: _RecommendedDoctorCard(
                 doctor: doctor,
                 color: color,
