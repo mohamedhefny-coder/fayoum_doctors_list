@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/hospital_model.dart';
-import 'hospital_details_screen.dart';
 
 class GovernmentHospitalsScreen extends StatefulWidget {
   const GovernmentHospitalsScreen({super.key});
@@ -105,13 +104,18 @@ class _GovernmentHospitalsScreenState extends State<GovernmentHospitalsScreen>
     }).toList();
   }
 
-  void _openDetails(_HospitalData hospital) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => HospitalDetailsScreen(hospital: hospital.model),
-      ),
-    );
+  void _showComingSoon() {
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) return;
+
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('سوف تكون متوفرة قريباً'),
+          duration: Duration(seconds: 2),
+        ),
+      );
   }
 
   @override
@@ -356,7 +360,7 @@ class _GovernmentHospitalsScreenState extends State<GovernmentHospitalsScreen>
             opacity: _animationController,
             child: _HospitalCardWidget(
               hospital: hospitals[index],
-              onTap: () => _openDetails(hospitals[index]),
+              onTap: _showComingSoon,
             ),
           ),
         );

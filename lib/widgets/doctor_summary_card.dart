@@ -5,18 +5,20 @@ class DoctorSummaryCard extends StatelessWidget {
   final Doctor doctor;
   final Color cardColor;
   final VoidCallback? onTap;
+  final EdgeInsetsGeometry margin;
 
   const DoctorSummaryCard({
     super.key,
     required this.doctor,
     required this.cardColor,
     this.onTap,
+    this.margin = const EdgeInsets.only(bottom: 16),
   });
 
   @override
   Widget build(BuildContext context) {
     final content = Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: margin,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,

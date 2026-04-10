@@ -121,7 +121,8 @@ class RadiologyService {
         'name': name,
         'is_open_24_hours': isOpen24Hours,
         'has_booking': hasBooking,
-        'is_published': true,
+        // نشر البيانات يتطلب موافقة المدير
+        'is_published': false,
       };
       if (address != null) centerData['address'] = address;
       if (phone != null) centerData['phone'] = phone;
@@ -130,11 +131,13 @@ class RadiologyService {
       if (locationUrl != null) centerData['location_url'] = locationUrl;
       if (email != null) centerData['email'] = email;
       if (workingHours != null) centerData['working_hours'] = workingHours;
-      if (services != null && services.isNotEmpty) centerData['services'] = services;
+      if (services != null && services.isNotEmpty)
+        centerData['services'] = services;
       if (features != null) centerData['features'] = features;
       if (discounts != null) centerData['discounts'] = discounts;
       if (contracts != null) centerData['contracts'] = contracts;
-      if (doctors != null && doctors.isNotEmpty) centerData['doctors'] = doctors;
+      if (doctors != null && doctors.isNotEmpty)
+        centerData['doctors'] = doctors;
       if (coverImageUrl != null) centerData['cover_image_url'] = coverImageUrl;
       if (galleryImageUrls != null && galleryImageUrls.isNotEmpty) {
         centerData['gallery_image_urls'] = galleryImageUrls;
@@ -194,7 +197,9 @@ class RadiologyService {
 
       final bytes = await file.readAsBytes();
 
-      await _supabase.storage.from(_bucket).uploadBinary(
+      await _supabase.storage
+          .from(_bucket)
+          .uploadBinary(
             fileName,
             bytes,
             fileOptions: FileOptions(contentType: contentType, upsert: true),
@@ -212,7 +217,9 @@ class RadiologyService {
       );
       throw Exception('خطأ رفع الصور (DB): ${e.message}');
     } catch (e) {
-      debugPrint('❌ Error uploading image (bucket=$_bucket, folder=$folder): $e');
+      debugPrint(
+        '❌ Error uploading image (bucket=$_bucket, folder=$folder): $e',
+      );
       throw Exception('خطأ رفع الصور: $e');
     }
   }

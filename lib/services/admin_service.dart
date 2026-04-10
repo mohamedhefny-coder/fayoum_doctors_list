@@ -40,7 +40,19 @@ class AdminService {
 
   Future<void> deleteRadiologyCenter(String centerId) async {
     try {
-      await _supabase.from('radiology_centers').delete().eq('id', centerId);
+      final deleted = await _supabase
+          .from('radiology_centers')
+          .delete()
+          .eq('id', centerId)
+          .select('id');
+
+      final deletedList = List<Map<String, dynamic>>.from(deleted);
+      if (deletedList.isEmpty) {
+        throw Exception(
+          'تعذر حذف المركز (صلاحيات غير كافية أو سياسات RLS تمنع الحذف). '
+          'نفّذ سكربت fix_radiology_centers_admin_policies.sql على Supabase وتأكد أن حسابك مُسجل في جدول admins.',
+        );
+      }
     } catch (e) {
       throw Exception('فشل حذف مركز الأشعة: ${e.toString()}');
     }

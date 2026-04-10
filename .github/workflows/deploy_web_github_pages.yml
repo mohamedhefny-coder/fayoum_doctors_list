@@ -1,6 +1,6 @@
 name: Deploy Flutter Web (GitHub Pages)
 
-on:
+'on':
   push:
     branches:
       - main
@@ -32,7 +32,7 @@ jobs:
 
       - name: Build web
         env:
-          BASE_HREF: ${{ vars.BASE_HREF }}
+          BASE_HREF: ${{ vars['BASE_HREF'] || '/' }}
         run: |
           set -eux
           BASE_HREF_VALUE="${BASE_HREF:-/}"
@@ -40,7 +40,7 @@ jobs:
 
       - name: SPA routing + optional custom domain
         env:
-          CUSTOM_DOMAIN: ${{ vars.CUSTOM_DOMAIN }}
+          CUSTOM_DOMAIN: ${{ vars['CUSTOM_DOMAIN'] || '' }}
         run: |
           set -eux
           cp build/web/index.html build/web/404.html

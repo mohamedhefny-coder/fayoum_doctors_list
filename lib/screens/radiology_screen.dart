@@ -1,4 +1,3 @@
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -71,7 +70,9 @@ class _RadiologyScreenState extends State<RadiologyScreen>
 
   List<_RadiologyCenter> get _allCenters {
     final remoteNames = _remoteCenters.map((c) => c.name).toSet();
-    final local = _staticCenters.where((c) => !remoteNames.contains(c.name)).toList();
+    final local = _staticCenters
+        .where((c) => !remoteNames.contains(c.name))
+        .toList();
     return [..._remoteCenters, ...local];
   }
 
@@ -95,20 +96,18 @@ class _RadiologyScreenState extends State<RadiologyScreen>
 
     _initialCenterOpened = true;
 
-    final match = _allCenters.cast<_RadiologyCenter?>().firstWhere(
-      (c) {
-        final candidate =
-            (c?.name ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
-        return candidate.toLowerCase() == target.toLowerCase();
-      },
-      orElse: () => null,
-    );
+    final match = _allCenters.cast<_RadiologyCenter?>().firstWhere((c) {
+      final candidate = (c?.name ?? '').replaceAll(RegExp(r'\s+'), ' ').trim();
+      return candidate.toLowerCase() == target.toLowerCase();
+    }, orElse: () => null);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       if (match == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('لم يتم العثور على مركز الأشعة المطلوب.')),
+          const SnackBar(
+            content: Text('لم يتم العثور على مركز الأشعة المطلوب.'),
+          ),
         );
         return;
       }
@@ -132,10 +131,10 @@ class _RadiologyScreenState extends State<RadiologyScreen>
           // تحويل features من نص مفصول بـ (،) إلى قائمة
           final List<String> features = json['features'] != null
               ? (json['features'] as String)
-                  .split('،')
-                  .map((e) => e.trim())
-                  .where((e) => e.isNotEmpty)
-                  .toList()
+                    .split('،')
+                    .map((e) => e.trim())
+                    .where((e) => e.isNotEmpty)
+                    .toList()
               : [];
 
           // تحويل doctors من JSONB إلى List<Map<String,String>>
@@ -941,7 +940,7 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                         fit: BoxFit.cover,
                         width: double.infinity,
                         height: double.infinity,
-                        errorBuilder: (_, __, ___) => Container(
+                        errorBuilder: (_, _, _) => Container(
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topRight,
@@ -984,25 +983,25 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                         children: [
                           const SizedBox(height: 40),
                           if (center.coverImageUrl == null)
-                          Container(
-                            padding: const EdgeInsets.all(26),
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: Colors.white.withValues(alpha: 0.18),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.white.withValues(alpha: 0.12),
-                                  blurRadius: 30,
-                                  spreadRadius: 6,
-                                ),
-                              ],
+                            Container(
+                              padding: const EdgeInsets.all(26),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.white.withValues(alpha: 0.18),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.white.withValues(alpha: 0.12),
+                                    blurRadius: 30,
+                                    spreadRadius: 6,
+                                  ),
+                                ],
+                              ),
+                              child: Icon(
+                                center.icon,
+                                size: 58,
+                                color: Colors.white,
+                              ),
                             ),
-                            child: Icon(
-                              center.icon,
-                              size: 58,
-                              color: Colors.white,
-                            ),
-                          ),
                           const SizedBox(height: 14),
                           Text(
                             center.name,
@@ -1106,8 +1105,10 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                               ).toString();
                               showDialog(
                                 context: context,
-                                builder: (_) =>
-                                    _QrFullDialog(center: center, qrData: qrData),
+                                builder: (_) => _QrFullDialog(
+                                  center: center,
+                                  qrData: qrData,
+                                ),
                               );
                             },
                             child: Container(
@@ -1278,7 +1279,9 @@ class _RadiologyDetailsScreen extends StatelessWidget {
 
                               return Container(
                                 width: 180,
-                                constraints: const BoxConstraints(minHeight: 110),
+                                constraints: const BoxConstraints(
+                                  minHeight: 110,
+                                ),
                                 padding: const EdgeInsets.symmetric(
                                   horizontal: 14,
                                   vertical: 14,
@@ -1297,7 +1300,9 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                                       height: 56,
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
-                                        color: center.color.withValues(alpha: 0.15),
+                                        color: center.color.withValues(
+                                          alpha: 0.15,
+                                        ),
                                       ),
                                       child: ClipOval(
                                         child: photoUrl.isNotEmpty
@@ -1306,8 +1311,9 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                                                 width: 56,
                                                 height: 56,
                                                 fit: BoxFit.cover,
-                                                filterQuality: FilterQuality.high,
-                                                errorBuilder: (_, __, ___) => Icon(
+                                                filterQuality:
+                                                    FilterQuality.high,
+                                                errorBuilder: (_, _, _) => Icon(
                                                   Icons.person_rounded,
                                                   size: 30,
                                                   color: center.color,
@@ -1374,7 +1380,7 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                             child: ListView.separated(
                               scrollDirection: Axis.horizontal,
                               itemCount: center.galleryImageUrls.length,
-                              separatorBuilder: (_, __) =>
+                              separatorBuilder: (_, _) =>
                                   const SizedBox(width: 10),
                               itemBuilder: (context, i) {
                                 final url = center.galleryImageUrls[i];
@@ -1385,7 +1391,7 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                                     child: Image.network(
                                       url,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => Container(
+                                      errorBuilder: (_, _, _) => Container(
                                         color: Colors.grey.shade200,
                                         child: const Icon(
                                           Icons.broken_image_outlined,
@@ -1418,7 +1424,9 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                         borderRadius: BorderRadius.circular(18),
                         boxShadow: [
                           BoxShadow(
-                            color: const Color(0xFF9C27B0).withValues(alpha: 0.45),
+                            color: const Color(
+                              0xFF9C27B0,
+                            ).withValues(alpha: 0.45),
                             blurRadius: 20,
                             offset: const Offset(0, 8),
                           ),
@@ -1706,10 +1714,7 @@ class _RadiologyBookingScreenState extends State<_RadiologyBookingScreen> {
               const SizedBox(height: 16),
               const Text(
                 'تم إرسال طلب الحجز',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
@@ -1753,10 +1758,7 @@ class _RadiologyBookingScreenState extends State<_RadiologyBookingScreen> {
         appBar: AppBar(
           title: const Text(
             'حجز موعد',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.bold,
-            ),
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
           ),
           backgroundColor: const Color(0xFF9C27B0),
           iconTheme: const IconThemeData(color: Colors.white),
@@ -1787,9 +1789,7 @@ class _RadiologyBookingScreenState extends State<_RadiologyBookingScreen> {
                     ],
                   ),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: color.withValues(alpha: 0.3),
-                  ),
+                  border: Border.all(color: color.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
@@ -1896,8 +1896,7 @@ class _RadiologyBookingScreenState extends State<_RadiologyBookingScreen> {
                     children: widget.center.services.map((service) {
                       final isSelected = _selectedService == service;
                       return GestureDetector(
-                        onTap: () =>
-                            setState(() => _selectedService = service),
+                        onTap: () => setState(() => _selectedService = service),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 200),
                           padding: const EdgeInsets.symmetric(
@@ -1933,8 +1932,7 @@ class _RadiologyBookingScreenState extends State<_RadiologyBookingScreen> {
                                     ? Icons.check_circle_rounded
                                     : Icons.radio_button_unchecked_rounded,
                                 size: 16,
-                                color:
-                                    isSelected ? Colors.white : color,
+                                color: isSelected ? Colors.white : color,
                               ),
                               const SizedBox(width: 6),
                               Text(
@@ -1942,9 +1940,7 @@ class _RadiologyBookingScreenState extends State<_RadiologyBookingScreen> {
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w600,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : color,
+                                  color: isSelected ? Colors.white : color,
                                 ),
                               ),
                             ],
@@ -2038,8 +2034,7 @@ class _RadiologyBookingScreenState extends State<_RadiologyBookingScreen> {
                     children: _timeSlots.map((slot) {
                       final isSelected = _selectedTimeSlot == slot;
                       return GestureDetector(
-                        onTap: () =>
-                            setState(() => _selectedTimeSlot = slot),
+                        onTap: () => setState(() => _selectedTimeSlot = slot),
                         child: AnimatedContainer(
                           duration: const Duration(milliseconds: 180),
                           padding: const EdgeInsets.symmetric(
@@ -2047,14 +2042,10 @@ class _RadiologyBookingScreenState extends State<_RadiologyBookingScreen> {
                             vertical: 9,
                           ),
                           decoration: BoxDecoration(
-                            color: isSelected
-                                ? color
-                                : Colors.white,
+                            color: isSelected ? color : Colors.white,
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: isSelected
-                                  ? color
-                                  : Colors.grey.shade300,
+                              color: isSelected ? color : Colors.grey.shade300,
                               width: 1.5,
                             ),
                             boxShadow: isSelected
@@ -2072,7 +2063,9 @@ class _RadiologyBookingScreenState extends State<_RadiologyBookingScreen> {
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: isSelected ? Colors.white : Colors.grey[700],
+                              color: isSelected
+                                  ? Colors.white
+                                  : Colors.grey[700],
                             ),
                           ),
                         ),
@@ -2105,10 +2098,7 @@ class _RadiologyBookingScreenState extends State<_RadiologyBookingScreen> {
               Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [
-                      const Color(0xFF6A1B9A),
-                      color,
-                    ],
+                    colors: [const Color(0xFF6A1B9A), color],
                     begin: Alignment.centerRight,
                     end: Alignment.centerLeft,
                   ),
@@ -2461,15 +2451,14 @@ class _DoctorEntry {
 
 // ====== صفحة إضافة مركز أشعة ======
 class AddRadiologyCenterScreen extends StatefulWidget {
-  const AddRadiologyCenterScreen();
+  const AddRadiologyCenterScreen({super.key});
 
   @override
   State<AddRadiologyCenterScreen> createState() =>
       _AddRadiologyCenterScreenState();
 }
 
-class _AddRadiologyCenterScreenState
-    extends State<AddRadiologyCenterScreen> {
+class _AddRadiologyCenterScreenState extends State<AddRadiologyCenterScreen> {
   final _formKey = GlobalKey<FormState>();
 
   final _nameController = TextEditingController();
@@ -2742,7 +2731,7 @@ class _AddRadiologyCenterScreenState
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('تم حفظ بيانات المركز بنجاح'),
+            content: Text('تم حفظ بيانات المركز وسيتم نشرها بعد موافقة المدير'),
             backgroundColor: Color(0xFF9C27B0),
           ),
         );
@@ -2788,8 +2777,13 @@ class _AddRadiologyCenterScreenState
       child: Scaffold(
         appBar: AppBar(
           title: Text(
-            _nameController.text.isNotEmpty ? 'تعديل بيانات المركز' : 'إضافة مركز أشعة',
-            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+            _nameController.text.isNotEmpty
+                ? 'تعديل بيانات المركز'
+                : 'إضافة مركز أشعة',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+            ),
           ),
           backgroundColor: const Color(0xFF9C27B0),
           iconTheme: const IconThemeData(color: Colors.white),
@@ -2810,8 +2804,9 @@ class _AddRadiologyCenterScreenState
                     label: 'اسم المركز',
                     hint: 'مثال: مركز الفيوم للأشعة',
                     icon: Icons.medical_information,
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'هذا الحقل مطلوب' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'هذا الحقل مطلوب'
+                        : null,
                   ),
                   const SizedBox(height: 14),
                   _buildField(
@@ -2820,8 +2815,9 @@ class _AddRadiologyCenterScreenState
                     hint: 'الشارع، الحي، المنطقة',
                     icon: Icons.location_on,
                     maxLines: 2,
-                    validator: (v) =>
-                        (v == null || v.trim().isEmpty) ? 'هذا الحقل مطلوب' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'هذا الحقل مطلوب'
+                        : null,
                   ),
                   const SizedBox(height: 14),
                   _buildField(
@@ -2878,7 +2874,8 @@ class _AddRadiologyCenterScreenState
                                   top: 8,
                                   left: 8,
                                   child: GestureDetector(
-                                    onTap: () => setState(() => _coverImage = null),
+                                    onTap: () =>
+                                        setState(() => _coverImage = null),
                                     child: Container(
                                       padding: const EdgeInsets.all(4),
                                       decoration: const BoxDecoration(
@@ -2904,17 +2901,26 @@ class _AddRadiologyCenterScreenState
                                         vertical: 6,
                                       ),
                                       decoration: BoxDecoration(
-                                        color: Colors.black.withValues(alpha: 0.6),
+                                        color: Colors.black.withValues(
+                                          alpha: 0.6,
+                                        ),
                                         borderRadius: BorderRadius.circular(20),
                                       ),
                                       child: const Row(
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Icon(Icons.edit, color: Colors.white, size: 14),
+                                          Icon(
+                                            Icons.edit,
+                                            color: Colors.white,
+                                            size: 14,
+                                          ),
                                           SizedBox(width: 4),
                                           Text(
                                             'تغيير',
-                                            style: TextStyle(color: Colors.white, fontSize: 12),
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                            ),
                                           ),
                                         ],
                                       ),
@@ -2924,68 +2930,118 @@ class _AddRadiologyCenterScreenState
                               ],
                             )
                           : _existingCoverUrl != null
-                              // صورة محفوظة من قبل
-                              ? Stack(
-                                  fit: StackFit.expand,
-                                  children: [
-                                    Image.network(
-                                      _existingCoverUrl!,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => const Center(
-                                        child: Icon(Icons.broken_image_outlined, size: 40, color: Colors.grey),
-                                      ),
+                          // صورة محفوظة من قبل
+                          ? Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.network(
+                                  _existingCoverUrl!,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => const Center(
+                                    child: Icon(
+                                      Icons.broken_image_outlined,
+                                      size: 40,
+                                      color: Colors.grey,
                                     ),
-                                    Positioned(
-                                      top: 8,
-                                      left: 8,
-                                      child: GestureDetector(
-                                        onTap: () => setState(() => _existingCoverUrl = null),
-                                        child: Container(
-                                          padding: const EdgeInsets.all(4),
-                                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                          child: const Icon(Icons.close, color: Colors.white, size: 18),
-                                        ),
-                                      ),
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 8,
+                                  left: 8,
+                                  child: GestureDetector(
+                                    onTap: () => setState(
+                                      () => _existingCoverUrl = null,
                                     ),
-                                    Positioned(
-                                      bottom: 8,
-                                      right: 8,
-                                      child: GestureDetector(
-                                        onTap: _pickCoverImage,
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: Colors.black.withValues(alpha: 0.6),
-                                            borderRadius: BorderRadius.circular(20),
-                                          ),
-                                          child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                                            Icon(Icons.edit, color: Colors.white, size: 14),
-                                            SizedBox(width: 4),
-                                            Text('تغيير', style: TextStyle(color: Colors.white, fontSize: 12)),
-                                          ]),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                )
-                              // لا توجد صورة
-                              : Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.all(14),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF9C27B0).withValues(alpha: 0.12),
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
                                         shape: BoxShape.circle,
                                       ),
-                                      child: const Icon(Icons.add_photo_alternate_outlined, size: 36, color: Color(0xFF9C27B0)),
+                                      child: const Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 18,
+                                      ),
                                     ),
-                                    const SizedBox(height: 10),
-                                    const Text('اضغط لاختيار صورة الغلاف', style: TextStyle(color: Color(0xFF9C27B0), fontWeight: FontWeight.w600, fontSize: 14)),
-                                    const SizedBox(height: 4),
-                                    const Text('JPG, PNG - الحجم الأقصى 5 ميجا', style: TextStyle(color: Colors.grey, fontSize: 12)),
-                                  ],
+                                  ),
                                 ),
+                                Positioned(
+                                  bottom: 8,
+                                  right: 8,
+                                  child: GestureDetector(
+                                    onTap: _pickCoverImage,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 6,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.6,
+                                        ),
+                                        borderRadius: BorderRadius.circular(20),
+                                      ),
+                                      child: const Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.edit,
+                                            color: Colors.white,
+                                            size: 14,
+                                          ),
+                                          SizedBox(width: 4),
+                                          Text(
+                                            'تغيير',
+                                            style: TextStyle(
+                                              color: Colors.white,
+                                              fontSize: 12,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          // لا توجد صورة
+                          : Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: const Color(
+                                      0xFF9C27B0,
+                                    ).withValues(alpha: 0.12),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Icon(
+                                    Icons.add_photo_alternate_outlined,
+                                    size: 36,
+                                    color: Color(0xFF9C27B0),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                const Text(
+                                  'اضغط لاختيار صورة الغلاف',
+                                  style: TextStyle(
+                                    color: Color(0xFF9C27B0),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                const Text(
+                                  'JPG, PNG - الحجم الأقصى 5 ميجا',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
+                            ),
                     ),
                   ),
                 ],
@@ -3020,17 +3076,23 @@ class _AddRadiologyCenterScreenState
                     child: ListView(
                       scrollDirection: Axis.horizontal,
                       children: [
-                        if (_existingGalleryUrls.length + _galleryImages.length < 10)
+                        if (_existingGalleryUrls.length +
+                                _galleryImages.length <
+                            10)
                           GestureDetector(
                             onTap: _pickGalleryImages,
                             child: Container(
                               width: 100,
                               margin: const EdgeInsets.only(left: 10),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF9C27B0).withValues(alpha: 0.06),
+                                color: const Color(
+                                  0xFF9C27B0,
+                                ).withValues(alpha: 0.06),
                                 borderRadius: BorderRadius.circular(12),
                                 border: Border.all(
-                                  color: const Color(0xFF9C27B0).withValues(alpha: 0.4),
+                                  color: const Color(
+                                    0xFF9C27B0,
+                                  ).withValues(alpha: 0.4),
                                   width: 1.5,
                                 ),
                               ),
@@ -3064,7 +3126,10 @@ class _AddRadiologyCenterScreenState
                             margin: const EdgeInsets.only(left: 10),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: Colors.grey.shade300, width: 1),
+                              border: Border.all(
+                                color: Colors.grey.shade300,
+                                width: 1,
+                              ),
                             ),
                             clipBehavior: Clip.antiAlias,
                             child: Stack(
@@ -3073,9 +3138,11 @@ class _AddRadiologyCenterScreenState
                                 Image.network(
                                   url,
                                   fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Container(
+                                  errorBuilder: (_, _, _) => Container(
                                     color: Colors.grey.shade200,
-                                    child: const Icon(Icons.broken_image_outlined),
+                                    child: const Icon(
+                                      Icons.broken_image_outlined,
+                                    ),
                                   ),
                                 ),
                                 Positioned(
@@ -3085,8 +3152,15 @@ class _AddRadiologyCenterScreenState
                                     onTap: () => _removeExistingGalleryUrl(i),
                                     child: Container(
                                       padding: const EdgeInsets.all(3),
-                                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                      child: const Icon(Icons.close, color: Colors.white, size: 14),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.close,
+                                        color: Colors.white,
+                                        size: 14,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -3094,9 +3168,14 @@ class _AddRadiologyCenterScreenState
                                   bottom: 4,
                                   left: 4,
                                   child: Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.55),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.55,
+                                      ),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
@@ -3158,7 +3237,9 @@ class _AddRadiologyCenterScreenState
                                       vertical: 2,
                                     ),
                                     decoration: BoxDecoration(
-                                      color: Colors.black.withValues(alpha: 0.55),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.55,
+                                      ),
                                       borderRadius: BorderRadius.circular(8),
                                     ),
                                     child: Text(
@@ -3178,7 +3259,8 @@ class _AddRadiologyCenterScreenState
                       ],
                     ),
                   ),
-                  if (_galleryImages.isEmpty && _existingGalleryUrls.isEmpty) ...[
+                  if (_galleryImages.isEmpty &&
+                      _existingGalleryUrls.isEmpty) ...[
                     const SizedBox(height: 8),
                     const Center(
                       child: Text(
@@ -3239,7 +3321,7 @@ class _AddRadiologyCenterScreenState
                       }
                     }),
                     title: const Text('يعمل 24 ساعة'),
-                    activeColor: const Color(0xFF9C27B0),
+                    activeThumbColor: const Color(0xFF9C27B0),
                     contentPadding: EdgeInsets.zero,
                   ),
                   if (!_isOpen24Hours) ...[
@@ -3249,8 +3331,9 @@ class _AddRadiologyCenterScreenState
                       label: 'ساعات العمل',
                       hint: 'مثال: 8 ص - 10 م يومياً',
                       icon: Icons.access_time_filled,
-                      validator: (v) =>
-                          (v == null || v.trim().isEmpty) ? 'هذا الحقل مطلوب' : null,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'هذا الحقل مطلوب'
+                          : null,
                     ),
                   ],
                 ],
@@ -3278,7 +3361,10 @@ class _AddRadiologyCenterScreenState
                           _selectedServices.remove(service);
                         }
                       }),
-                      title: Text(service, style: const TextStyle(fontSize: 14)),
+                      title: Text(
+                        service,
+                        style: const TextStyle(fontSize: 14),
+                      ),
                       activeColor: const Color(0xFF9C27B0),
                       controlAffinity: ListTileControlAffinity.leading,
                       contentPadding: EdgeInsets.zero,
@@ -3364,7 +3450,9 @@ class _AddRadiologyCenterScreenState
                         color: const Color(0xFFF3E5F5),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: const Color(0xFF9C27B0).withValues(alpha: 0.25),
+                          color: const Color(
+                            0xFF9C27B0,
+                          ).withValues(alpha: 0.25),
                         ),
                       ),
                       child: Column(
@@ -3388,7 +3476,9 @@ class _AddRadiologyCenterScreenState
                                   decoration: BoxDecoration(
                                     color: Colors.red.shade50,
                                     shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.red.shade200),
+                                    border: Border.all(
+                                      color: Colors.red.shade200,
+                                    ),
                                   ),
                                   child: Icon(
                                     Icons.close_rounded,
@@ -3409,10 +3499,14 @@ class _AddRadiologyCenterScreenState
                                   width: 80,
                                   height: 80,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF9C27B0).withValues(alpha: 0.1),
+                                    color: const Color(
+                                      0xFF9C27B0,
+                                    ).withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
-                                      color: const Color(0xFF9C27B0).withValues(alpha: 0.35),
+                                      color: const Color(
+                                        0xFF9C27B0,
+                                      ).withValues(alpha: 0.35),
                                       width: 1.5,
                                     ),
                                   ),
@@ -3426,41 +3520,75 @@ class _AddRadiologyCenterScreenState
                                               bottom: 2,
                                               right: 2,
                                               child: Container(
-                                                padding: const EdgeInsets.all(3),
-                                                decoration: const BoxDecoration(color: Color(0xFF9C27B0), shape: BoxShape.circle),
-                                                child: const Icon(Icons.edit, color: Colors.white, size: 11),
+                                                padding: const EdgeInsets.all(
+                                                  3,
+                                                ),
+                                                decoration: const BoxDecoration(
+                                                  color: Color(0xFF9C27B0),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(
+                                                  Icons.edit,
+                                                  color: Colors.white,
+                                                  size: 11,
+                                                ),
                                               ),
                                             ),
                                           ],
                                         )
                                       : doc.existingPhotoUrl != null
-                                          ? Stack(
-                                              fit: StackFit.expand,
-                                              children: [
-                                                Image.network(
-                                                  doc.existingPhotoUrl!,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (_, __, ___) => const Icon(Icons.broken_image_outlined, size: 30, color: Colors.grey),
-                                                ),
-                                                Positioned(
-                                                  bottom: 2,
-                                                  right: 2,
-                                                  child: Container(
-                                                    padding: const EdgeInsets.all(3),
-                                                    decoration: const BoxDecoration(color: Color(0xFF9C27B0), shape: BoxShape.circle),
-                                                    child: const Icon(Icons.edit, color: Colors.white, size: 11),
+                                      ? Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            Image.network(
+                                              doc.existingPhotoUrl!,
+                                              fit: BoxFit.cover,
+                                              errorBuilder: (_, _, _) =>
+                                                  const Icon(
+                                                    Icons.broken_image_outlined,
+                                                    size: 30,
+                                                    color: Colors.grey,
                                                   ),
-                                                ),
-                                              ],
-                                            )
-                                          : const Column(
-                                              mainAxisAlignment: MainAxisAlignment.center,
-                                              children: [
-                                                Icon(Icons.add_a_photo_outlined, color: Color(0xFF9C27B0), size: 26),
-                                                SizedBox(height: 4),
-                                                Text('صورة', style: TextStyle(fontSize: 11, color: Color(0xFF9C27B0))),
-                                              ],
                                             ),
+                                            Positioned(
+                                              bottom: 2,
+                                              right: 2,
+                                              child: Container(
+                                                padding: const EdgeInsets.all(
+                                                  3,
+                                                ),
+                                                decoration: const BoxDecoration(
+                                                  color: Color(0xFF9C27B0),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: const Icon(
+                                                  Icons.edit,
+                                                  color: Colors.white,
+                                                  size: 11,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : const Column(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.add_a_photo_outlined,
+                                              color: Color(0xFF9C27B0),
+                                              size: 26,
+                                            ),
+                                            SizedBox(height: 4),
+                                            Text(
+                                              'صورة',
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                color: Color(0xFF9C27B0),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -3476,8 +3604,12 @@ class _AddRadiologyCenterScreenState
                                           margin: const EdgeInsets.all(8),
                                           padding: const EdgeInsets.all(6),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFF9C27B0).withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(8),
+                                            color: const Color(
+                                              0xFF9C27B0,
+                                            ).withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                           ),
                                           child: const Icon(
                                             Icons.person_rounded,
@@ -3485,22 +3617,33 @@ class _AddRadiologyCenterScreenState
                                             size: 18,
                                           ),
                                         ),
-                                        contentPadding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 10,
-                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 10,
+                                            ),
                                         filled: true,
                                         fillColor: Colors.white,
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
                                         ),
                                         enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
                                         ),
                                         focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                           borderSide: const BorderSide(
                                             color: Color(0xFF9C27B0),
                                             width: 2,
@@ -3518,8 +3661,12 @@ class _AddRadiologyCenterScreenState
                                           margin: const EdgeInsets.all(8),
                                           padding: const EdgeInsets.all(6),
                                           decoration: BoxDecoration(
-                                            color: const Color(0xFF9C27B0).withValues(alpha: 0.1),
-                                            borderRadius: BorderRadius.circular(8),
+                                            color: const Color(
+                                              0xFF9C27B0,
+                                            ).withValues(alpha: 0.1),
+                                            borderRadius: BorderRadius.circular(
+                                              8,
+                                            ),
                                           ),
                                           child: const Icon(
                                             Icons.workspace_premium_rounded,
@@ -3527,22 +3674,33 @@ class _AddRadiologyCenterScreenState
                                             size: 18,
                                           ),
                                         ),
-                                        contentPadding: const EdgeInsets.symmetric(
-                                          horizontal: 12,
-                                          vertical: 10,
-                                        ),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 10,
+                                            ),
                                         filled: true,
                                         fillColor: Colors.white,
                                         border: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
                                         ),
                                         enabledBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
-                                          borderSide: BorderSide(color: Colors.grey.shade300),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: Colors.grey.shade300,
+                                          ),
                                         ),
                                         focusedBorder: OutlineInputBorder(
-                                          borderRadius: BorderRadius.circular(10),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
                                           borderSide: const BorderSide(
                                             color: Color(0xFF9C27B0),
                                             width: 2,
@@ -3564,7 +3722,10 @@ class _AddRadiologyCenterScreenState
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: _addDoctor,
-                      icon: const Icon(Icons.add_circle_outline_rounded, size: 20),
+                      icon: const Icon(
+                        Icons.add_circle_outline_rounded,
+                        size: 20,
+                      ),
                       label: const Text('إضافة طبيب'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: const Color(0xFF9C27B0),
@@ -3596,7 +3757,7 @@ class _AddRadiologyCenterScreenState
                       'تفعيل إذا كان المركز يقبل الحجز المسبق عبر الهاتف أو التطبيق',
                       style: TextStyle(fontSize: 12),
                     ),
-                    activeColor: const Color(0xFF9C27B0),
+                    activeThumbColor: const Color(0xFF9C27B0),
                     contentPadding: EdgeInsets.zero,
                   ),
                 ],
@@ -3621,7 +3782,9 @@ class _AddRadiologyCenterScreenState
                   label: Text(
                     _isSubmitting ? 'جارٍ الحفظ...' : 'حفظ البيانات',
                     style: const TextStyle(
-                        fontSize: 17, fontWeight: FontWeight.bold),
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF9C27B0),
@@ -3679,8 +3842,7 @@ class _AddRadiologyCenterScreenState
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide:
-              const BorderSide(color: Color(0xFF9C27B0), width: 2),
+          borderSide: const BorderSide(color: Color(0xFF9C27B0), width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -3739,10 +3901,7 @@ class _SectionCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 13,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: [
@@ -3759,11 +3918,7 @@ class _SectionCard extends StatelessWidget {
                       color: const Color(0xFF9C27B0).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
-                    child: Icon(
-                      icon,
-                      color: const Color(0xFF9C27B0),
-                      size: 18,
-                    ),
+                    child: Icon(icon, color: const Color(0xFF9C27B0), size: 18),
                   ),
                   const SizedBox(width: 10),
                   Text(

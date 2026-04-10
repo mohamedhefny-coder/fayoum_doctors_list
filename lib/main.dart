@@ -282,7 +282,10 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
               // مع الحفاظ على عدم تمدد المحتوى بشكل مبالغ فيه.
               constraints: const BoxConstraints(maxWidth: 1200),
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                margin: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 16,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   boxShadow: [
@@ -580,10 +583,7 @@ class _WebSideNav extends StatelessWidget {
                 ),
                 const Text(
                   'الفيوم',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 13,
-                  ),
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
                 ),
               ],
             ),
@@ -1043,8 +1043,9 @@ class _HeaderContent extends StatelessWidget {
                     if (currentDoctor == null) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                          content:
-                              Text('الإشعارات متاحة لحسابات الأطباء فقط حالياً'),
+                          content: Text(
+                            'الإشعارات متاحة لحسابات الأطباء فقط حالياً',
+                          ),
                         ),
                       );
                       return;
@@ -1056,8 +1057,10 @@ class _HeaderContent extends StatelessWidget {
                             builder: (_) => const DoctorMessagesScreen(),
                           ),
                         )
-                        .then((_) =>
-                            DoctorRealtimeNotificationsService.markAllSeen());
+                        .then(
+                          (_) =>
+                              DoctorRealtimeNotificationsService.markAllSeen(),
+                        );
                   },
                   child: Container(
                     padding: const EdgeInsets.all(10),
@@ -1078,8 +1081,7 @@ class _HeaderContent extends StatelessWidget {
                       initialData: 0,
                       builder: (context, snapshot) {
                         final count = snapshot.data ?? 0;
-                        final showBadge =
-                            currentDoctor != null && count > 0;
+                        final showBadge = currentDoctor != null && count > 0;
                         return Stack(
                           clipBehavior: Clip.none,
                           children: [
@@ -2156,7 +2158,7 @@ class _RecommendedDoctors extends StatefulWidget {
 
 class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
   final _dbService = DoctorDatabaseService();
-  final PageController _controller = PageController(viewportFraction: 0.92);
+  final PageController _controller = PageController(viewportFraction: 0.75);
   final List<Doctor> _doctors = <Doctor>[];
   final List<_RotationItem> _rotation = <_RotationItem>[];
   Timer? _autoTimer;
@@ -2313,9 +2315,7 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
     if (_error != null) {
       return SizedBox(
         height: 140,
-        child: Center(
-          child: Text('تعذر تحميل الأطباء: $_error'),
-        ),
+        child: Center(child: Text('تعذر تحميل الأطباء: $_error')),
       );
     }
 
@@ -2326,46 +2326,8 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
       );
     }
 
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isWebWide = kIsWeb && screenWidth > 900;
-
-    // على الويب: شبكة 3 بطاقات بدلاً من الكاروسيل
-    if (isWebWide) {
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 2.3,
-        ),
-        itemCount: _doctors.length,
-        itemBuilder: (context, index) {
-          final doctor = _doctors[index];
-          final color = _colorForDoctor(doctor, index);
-          return DoctorSummaryCard(
-            doctor: doctor,
-            cardColor: color,
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => DoctorDetailScreen(
-                    doctor: doctor,
-                    cardColor: color,
-                  ),
-                ),
-              );
-            },
-          );
-        },
-      );
-    }
-
-    // على الموبايل: الكاروسيل الأصلي
     return SizedBox(
-      height: 190,
+      height: 230,
       child: PageView.builder(
         controller: _controller,
         onPageChanged: (_) => _scheduleNextAdvance(),
@@ -2375,22 +2337,36 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
           final doctor = item.doctor;
           final color = _colorForDoctor(doctor, index);
 
-          return Padding(
-            padding: const EdgeInsets.only(left: 6, right: 6),
-            child: DoctorSummaryCard(
-              doctor: doctor,
-              cardColor: color,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => DoctorDetailScreen(
-                      doctor: doctor,
-                      cardColor: color,
+          return AnimatedBuilder(
+            animation: _controller,
+            builder: (context, child) {
+              var scale = 1.0;
+              if (_controller.hasClients &&
+                  _controller.position.haveDimensions) {
+                final page =
+                    _controller.page ?? _controller.initialPage.toDouble();
+                final delta = (page - index).abs();
+                scale = (1 - (delta * 0.14)).clamp(0.88, 1.0);
+              }
+              return Center(
+                child: Transform.scale(scale: scale, child: child),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              child: _RecommendedDoctorCard(
+                doctor: doctor,
+                color: color,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) =>
+                          DoctorDetailScreen(doctor: doctor, cardColor: color),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           );
         },
@@ -2404,6 +2380,101 @@ class _RotationItem {
   final int durationSeconds;
 
   const _RotationItem(this.doctor, this.durationSeconds);
+}
+
+class _RecommendedDoctorCard extends StatelessWidget {
+  const _RecommendedDoctorCard({
+    required this.doctor,
+    required this.color,
+    required this.onTap,
+  });
+
+  final Doctor doctor;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: color.withValues(alpha: 0.18),
+                      blurRadius: 28,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(28),
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                  colors: [
+                    color.withValues(alpha: 0.10),
+                    Colors.white,
+                    color.withValues(alpha: 0.06),
+                  ],
+                ),
+              ),
+              padding: const EdgeInsets.all(2),
+              child: DoctorSummaryCard(
+                doctor: doctor,
+                cardColor: color,
+                margin: EdgeInsets.zero,
+              ),
+            ),
+          ),
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: const Color(0xFFFFD700), width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.08),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.star_rounded, size: 16, color: Colors.amber[800]),
+                  const SizedBox(width: 6),
+                  const Text(
+                    'موصى به',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ====== الخدمات الإضافية ======
