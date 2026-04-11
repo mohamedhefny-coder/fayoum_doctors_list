@@ -35,38 +35,7 @@ class _RadiologyScreenState extends State<RadiologyScreen>
   List<_RadiologyCenter> _remoteCenters = [];
   bool _isLoadingRemote = true;
 
-  late final List<_RadiologyCenter> _staticCenters = <_RadiologyCenter>[
-    _RadiologyCenter(
-      name: 'مركز أشعة الفيوم',
-      address: 'الفيوم - شارع الجمهورية - أمام مستشفى الفيوم العام',
-      phone: '084-6350000',
-      whatsapp: '',
-      facebook: '',
-      locationUrl: '',
-      email: '',
-      rating: 4.7,
-      ratingCount: 85,
-      workingHours: 'يومياً 8 ص - 10 م',
-      isOpen24Hours: false,
-      hasBooking: false,
-      services: [
-        'أشعة عادية (X-Ray)',
-        'أشعة مقطعية (CT Scan)',
-        'رنين مغناطيسي (MRI)',
-        'موجات صوتية (Ultrasound)',
-        'ماموجرام',
-        'أشعة بانوراما للأسنان',
-      ],
-      features: [
-        'أحدث الأجهزة',
-        'نتائج فورية',
-        'طاقم طبي متخصص',
-        'خصم 15% للمتقاعدين',
-      ],
-      icon: Icons.medical_information,
-      color: const Color(0xFF9C27B0),
-    ),
-  ];
+  late final List<_RadiologyCenter> _staticCenters = <_RadiologyCenter>[];
 
   List<_RadiologyCenter> get _allCenters {
     final remoteNames = _remoteCenters.map((c) => c.name).toSet();
@@ -152,6 +121,7 @@ class _RadiologyScreenState extends State<RadiologyScreen>
               : [];
 
           return _RadiologyCenter(
+            id: json['id']?.toString(),
             name: json['name'] ?? '',
             address: json['address'] ?? '',
             phone: json['phone'] ?? '',
@@ -486,6 +456,7 @@ class _RadiologyScreenState extends State<RadiologyScreen>
 }
 
 class _RadiologyCenter {
+  final String? id;
   final String name;
   final String address;
   final String phone;
@@ -507,6 +478,7 @@ class _RadiologyCenter {
   final List<Map<String, String>> doctors;
 
   _RadiologyCenter({
+    this.id,
     required this.name,
     required this.address,
     required this.phone,
@@ -797,10 +769,27 @@ class _CardInfoRow extends StatelessWidget {
   }
 }
 
-class _RadiologyDetailsScreen extends StatelessWidget {
+class _RadiologyDetailsScreen extends StatefulWidget {
   const _RadiologyDetailsScreen({required this.center});
 
   final _RadiologyCenter center;
+
+  @override
+  State<_RadiologyDetailsScreen> createState() => _RadiologyDetailsScreenState();
+}
+
+class _RadiologyDetailsScreenState extends State<_RadiologyDetailsScreen> {
+  late double _rating;
+  late int _ratingCount;
+
+  final _radiologyService = RadiologyService();
+
+  @override
+  void initState() {
+    super.initState();
+    _rating = widget.center.rating;
+    _ratingCount = widget.center.ratingCount;
+  }
 
   Future<void> _safeLaunch(Uri uri) async {
     try {
@@ -844,11 +833,192 @@ class _RadiologyDetailsScreen extends StatelessWidget {
     await _safeLaunch(uri);
   }
 
+  Future<void> _rateCenter(int ratingValue) async {
+    final id = widget.center.id;
+    if (id == null || id.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا يمكن تقييم هذا المركز حالياً.')),
+      );
+      return;
+    }
+
+    try {
+      final result = await _radiologyService.rateRadiologyCenter(
+        centerId: id,
+        ratingValue: ratingValue,
+      );
+
+      final newRating = (result['rating'] ?? _rating).toDouble();
+      final newCount = (result['rating_count'] ?? _ratingCount) as int;
+      if (!mounted) return;
+      setState(() {
+        _rating = newRating;
+        _ratingCount = newCount;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('شكراً لتقييمك!')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر إرسال التقييم حالياً.')),
+      );
+    }
+  }
+
+  Future<void> _openRateDialog() async {
+    final canRate = (widget.center.id ?? '').trim().isNotEmpty;
+    if (!canRate) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لا يمكن تقييم هذا المركز حالياً.')),
+      );
+      return;
+    }
+
+    int selected = 0;
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: const Text('قيّم المركز'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (i) {
+                      final value = i + 1;
+                      final filled = value <= selected;
+                      return IconButton(
+                        tooltip: '$value',
+                        onPressed: () => setLocal(() => selected = value),
+                        icon: Icon(
+                          filled
+                              ? Icons.star_rounded
+                              : Icons.star_border_rounded,
+                          color: Colors.amber,
+                          size: 32,
+                        ),
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    selected == 0
+                        ? 'اختر عدد النجوم'
+                        : 'تقييمك: $selected من 5',
+                    style: TextStyle(color: Colors.grey[700]),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('إلغاء'),
+                ),
+                FilledButton(
+                  onPressed: selected == 0
+                      ? null
+                      : () async {
+                          Navigator.pop(ctx);
+                          await _rateCenter(selected);
+                        },
+                  child: const Text('إرسال'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _openDoctorDetails(Map<String, String> doc) {
+    final photoUrl = (doc['photo_url'] ?? '').trim();
+    final name = (doc['name'] ?? '').trim();
+    final specialty = (doc['title'] ?? '').trim();
+
+    showDialog<void>(
+      context: context,
+      builder: (_) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          contentPadding: const EdgeInsets.fromLTRB(18, 18, 18, 8),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 88,
+                height: 88,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: widget.center.color.withValues(alpha: 0.12),
+                ),
+                child: ClipOval(
+                  child: photoUrl.isNotEmpty
+                      ? Image.network(
+                          photoUrl,
+                          width: 88,
+                          height: 88,
+                          fit: BoxFit.cover,
+                          filterQuality: FilterQuality.high,
+                          errorBuilder: (_, _, _) => Icon(
+                            Icons.person_rounded,
+                            size: 44,
+                            color: widget.center.color,
+                          ),
+                        )
+                      : Icon(
+                          Icons.person_rounded,
+                          size: 44,
+                          color: widget.center.color,
+                        ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                name.isEmpty ? 'طبيب' : name,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
+              if (specialty.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  specialty,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey[700],
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('إغلاق'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final center = widget.center;
     final hoursText = center.workingHours.trim().isNotEmpty
-        ? center.workingHours
-        : (center.isOpen24Hours ? 'متاح 24 ساعة' : 'غير محدد');
+      ? center.workingHours
+      : (center.isOpen24Hours ? 'متاح 24 ساعة' : 'غير محدد');
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -1049,20 +1219,33 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
-                                  children: List.generate(
-                                    5,
-                                    (i) => Icon(
-                                      i < center.rating.floor()
-                                          ? Icons.star_rounded
-                                          : Icons.star_border_rounded,
-                                      color: Colors.amber,
-                                      size: 26,
+                                  children: [
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: _openRateDialog,
+                                      child: Row(
+                                        children: List.generate(
+                                          5,
+                                          (i) => Icon(
+                                            i < _rating.floor()
+                                                ? Icons.star_rounded
+                                                : Icons.star_border_rounded,
+                                            color: Colors.amber,
+                                            size: 26,
+                                          ),
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    const SizedBox(width: 10),
+                                    TextButton(
+                                      onPressed: _openRateDialog,
+                                      child: const Text('قيّم'),
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(height: 6),
                                 Text(
-                                  '${center.rating} من 5  •  ${center.ratingCount} تقييم',
+                                  '${_rating.toStringAsFixed(1)} من 5  •  $_ratingCount تقييم',
                                   style: TextStyle(
                                     fontSize: 13,
                                     color: Colors.grey[600],
@@ -1088,7 +1271,7 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Text(
-                              '${center.rating}',
+                              _rating.toStringAsFixed(1),
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 24,
@@ -1269,99 +1452,117 @@ class _RadiologyDetailsScreen extends StatelessWidget {
                         icon: Icons.people_rounded,
                         color: center.color,
                         children: [
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 12,
-                            children: center.doctors.map((doc) {
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: center.doctors.length,
+                            gridDelegate:
+                                const SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: 2,
+                                  crossAxisSpacing: 12,
+                                  mainAxisSpacing: 12,
+                                  childAspectRatio: 2.25,
+                                ),
+                            itemBuilder: (context, index) {
+                              final doc = center.doctors[index];
                               final photoUrl = (doc['photo_url'] ?? '').trim();
                               final name = (doc['name'] ?? '').trim();
                               final specialty = (doc['title'] ?? '').trim();
 
-                              return Container(
-                                width: 180,
-                                constraints: const BoxConstraints(
-                                  minHeight: 110,
-                                ),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 14,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: center.color.withValues(alpha: 0.05),
+                              return Material(
+                                color: Colors.transparent,
+                                child: InkWell(
                                   borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: center.color.withValues(alpha: 0.18),
-                                  ),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 56,
-                                      height: 56,
-                                      decoration: BoxDecoration(
-                                        shape: BoxShape.circle,
+                                  onTap: () => _openDoctorDetails(doc),
+                                  child: Container(
+                                    constraints: const BoxConstraints(
+                                      minHeight: 110,
+                                    ),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                      vertical: 12,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: center.color.withValues(alpha: 0.05),
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
                                         color: center.color.withValues(
-                                          alpha: 0.15,
+                                          alpha: 0.18,
                                         ),
                                       ),
-                                      child: ClipOval(
-                                        child: photoUrl.isNotEmpty
-                                            ? Image.network(
-                                                photoUrl,
-                                                width: 56,
-                                                height: 56,
-                                                fit: BoxFit.cover,
-                                                filterQuality:
-                                                    FilterQuality.high,
-                                                errorBuilder: (_, _, _) => Icon(
-                                                  Icons.person_rounded,
-                                                  size: 30,
-                                                  color: center.color,
-                                                ),
-                                              )
-                                            : Icon(
-                                                Icons.person_rounded,
-                                                size: 30,
-                                                color: center.color,
-                                              ),
-                                      ),
                                     ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            name.isEmpty ? 'طبيب' : name,
-                                            style: const TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.bold,
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 50,
+                                          height: 50,
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            color: center.color.withValues(
+                                              alpha: 0.15,
                                             ),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                          if (specialty.isNotEmpty) ...[
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              specialty,
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                color: Colors.grey[700],
-                                                fontWeight: FontWeight.w600,
+                                          child: ClipOval(
+                                            child: photoUrl.isNotEmpty
+                                                ? Image.network(
+                                                    photoUrl,
+                                                    width: 50,
+                                                    height: 50,
+                                                    fit: BoxFit.cover,
+                                                    filterQuality:
+                                                        FilterQuality.high,
+                                                    errorBuilder: (_, _, _) =>
+                                                        Icon(
+                                                      Icons.person_rounded,
+                                                      size: 28,
+                                                      color: center.color,
+                                                    ),
+                                                  )
+                                                : Icon(
+                                                    Icons.person_rounded,
+                                                    size: 28,
+                                                    color: center.color,
+                                                  ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                name.isEmpty ? 'طبيب' : name,
+                                                style: const TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ],
-                                      ),
+                                              if (specialty.isNotEmpty) ...[
+                                                const SizedBox(height: 2),
+                                                Text(
+                                                  specialty,
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey[700],
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                                     ),
-                                  ],
+                                  ),
                                 ),
                               );
-                            }).toList(),
+                            },
                           ),
                         ],
                       ),

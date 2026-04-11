@@ -6,6 +6,34 @@ class RadiologyService {
   final _supabase = Supabase.instance.client;
   static const _bucket = 'radiology-images';
 
+  // إضافة تقييم لمركز أشعة (عبر RPC) وإرجاع التقييم الجديد وعدد التقييمات
+  Future<Map<String, dynamic>> rateRadiologyCenter({
+    required String centerId,
+    required int ratingValue,
+  }) async {
+    try {
+      final response = await _supabase.rpc(
+        'rate_radiology_center',
+        params: {
+          'center_id': centerId,
+          'rating_value': ratingValue,
+        },
+      );
+
+      if (response is List && response.isNotEmpty) {
+        return Map<String, dynamic>.from(response.first as Map);
+      }
+      if (response is Map) {
+        return Map<String, dynamic>.from(response);
+      }
+      throw Exception('استجابة غير متوقعة من دالة التقييم');
+    } on PostgrestException catch (e) {
+      throw Exception('خطأ في إرسال التقييم: ${e.message}');
+    } catch (e) {
+      throw Exception('خطأ في إرسال التقييم: $e');
+    }
+  }
+
   // تسجيل حساب مركز أشعة جديد
   Future<Map<String, dynamic>> registerCenter({
     required String centerName,

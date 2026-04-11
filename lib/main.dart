@@ -2158,7 +2158,8 @@ class _RecommendedDoctors extends StatefulWidget {
 
 class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
   final _dbService = DoctorDatabaseService();
-  final PageController _controller = PageController(viewportFraction: 0.75);
+  late PageController _controller;
+  double _viewportFraction = 0.75;
   final List<Doctor> _doctors = <Doctor>[];
   final List<_RotationItem> _rotation = <_RotationItem>[];
   Timer? _autoTimer;
@@ -2170,8 +2171,32 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
   @override
   void initState() {
     super.initState();
+    _controller = PageController(viewportFraction: _viewportFraction);
     _loadDoctors();
     _subscribeRealtime();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final width = MediaQuery.sizeOf(context).width;
+    final desired = width < 420
+        ? 1.0
+        : (width < 900 ? 0.92 : 0.75);
+
+    if (desired != _viewportFraction) {
+      final currentPage = _controller.hasClients
+          ? (_controller.page?.round() ?? 0)
+          : 0;
+      _controller.dispose();
+      _viewportFraction = desired;
+      _controller = PageController(
+        viewportFraction: _viewportFraction,
+        initialPage: currentPage,
+      );
+      _startAutoScroll();
+    }
   }
 
   @override
@@ -2326,8 +2351,10 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
       );
     }
 
+    final isNarrow = MediaQuery.sizeOf(context).width < 420;
+
     return SizedBox(
-      height: 200,
+      height: isNarrow ? 230 : 210,
       child: PageView.builder(
         controller: _controller,
         onPageChanged: (_) => _scheduleNextAdvance(),
@@ -2341,12 +2368,13 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
             animation: _controller,
             builder: (context, child) {
               var scale = 1.0;
-              if (_controller.hasClients &&
+              if (!isNarrow &&
+                  _controller.hasClients &&
                   _controller.position.haveDimensions) {
                 final page =
                     _controller.page ?? _controller.initialPage.toDouble();
                 final delta = (page - index).abs();
-                scale = (1 - (delta * 0.12)).clamp(0.90, 1.0);
+                scale = (1 - (delta * 0.08)).clamp(0.94, 1.0);
               }
               return Align(
                 alignment: Alignment.bottomCenter,
@@ -2358,7 +2386,10 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
               );
             },
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              padding: EdgeInsets.symmetric(
+                horizontal: isNarrow ? 8 : 10,
+                vertical: 6,
+              ),
               child: _RecommendedDoctorCard(
                 doctor: doctor,
                 color: color,
