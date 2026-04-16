@@ -1406,6 +1406,21 @@ class _QuickCategories extends StatelessWidget {
     ),
   ];
 
+  static const categoriesRow3 = [
+    _QuickCategory(
+      'مستلزمات طبية',
+      Icons.healing,
+      Color(0xFF0EA5E9),
+      imagePath: 'assets/images/medical_supplies.png',
+    ),
+    _QuickCategory(
+      'GYM',
+      Icons.fitness_center,
+      Color(0xFF22C55E),
+      imagePath: 'assets/images/gym.png',
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -1425,6 +1440,18 @@ class _QuickCategories extends StatelessWidget {
         // الصف الثاني
         Row(
           children: categoriesRow2.map((cat) {
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: _QuickCategoryCard(category: cat),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 12),
+        // الصف الثالث
+        Row(
+          children: categoriesRow3.map((cat) {
             return Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -1455,6 +1482,7 @@ class _QuickCategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const iconSize = 70.0;
+    final imageFit = category.label == 'GYM' ? BoxFit.cover : BoxFit.contain;
 
     void openCategory() {
       if (category.label == 'مستشفيات حكومية') {
@@ -1536,7 +1564,8 @@ class _QuickCategoryCard extends StatelessWidget {
                           category.imagePath!,
                           width: iconSize,
                           height: iconSize,
-                          fit: BoxFit.contain,
+                          fit: imageFit,
+                          filterQuality: FilterQuality.high,
                           errorBuilder: (context, error, stackTrace) {
                             return Icon(
                               category.icon,
@@ -2163,6 +2192,7 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
   final List<Doctor> _doctors = <Doctor>[];
   final List<_RotationItem> _rotation = <_RotationItem>[];
   Timer? _autoTimer;
+  bool _autoStartScheduled = false;
   Timer? _reloadDebounce;
   RealtimeChannel? _channel;
   bool _isLoading = true;
@@ -2181,9 +2211,7 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
     super.didChangeDependencies();
 
     final width = MediaQuery.sizeOf(context).width;
-    final desired = width < 420
-        ? 1.0
-        : (width < 900 ? 0.92 : 0.75);
+    final desired = width < 420 ? 1.0 : (width < 900 ? 0.92 : 0.75);
 
     if (desired != _viewportFraction) {
       final currentPage = _controller.hasClients
@@ -2294,6 +2322,20 @@ class _RecommendedDoctorsState extends State<_RecommendedDoctors> {
   void _startAutoScroll() {
     _autoTimer?.cancel();
     if (_rotation.length < 2) return;
+
+    // When called before the first build, the PageController has no clients yet.
+    // Defer starting the timer until the PageView is attached.
+    if (!_controller.hasClients) {
+      if (_autoStartScheduled) return;
+      _autoStartScheduled = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _autoStartScheduled = false;
+        if (!mounted) return;
+        _startAutoScroll();
+      });
+      return;
+    }
+
     _scheduleNextAdvance();
   }
 

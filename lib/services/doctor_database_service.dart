@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart' show TimeOfDay;
 import 'dart:io';
+import '../models/clinic_working_hours.dart';
 import '../models/doctor_model.dart';
 import '../models/doctor_working_hours.dart';
 
@@ -60,7 +61,8 @@ class DoctorDatabaseService {
     return (m.contains('column') &&
             m.contains(c) &&
             m.contains('does not exist')) ||
-        (m.contains('unknown') && m.contains('column') && m.contains(c));
+        (m.contains('unknown') && m.contains('column') && m.contains(c)) ||
+        (m.contains('could not find') && m.contains('column') && m.contains(c));
   }
 
   String _normalizePhoneToE164(String input) {
@@ -396,17 +398,37 @@ class DoctorDatabaseService {
   Future<Map<int, int>> getAppointmentHourCounts({
     required String doctorId,
     required DateTime date,
+    String? clinicId,
   }) async {
     final dateOnly = DateTime(date.year, date.month, date.day);
     final dateStr =
         '${dateOnly.year.toString().padLeft(4, '0')}-${dateOnly.month.toString().padLeft(2, '0')}-${dateOnly.day.toString().padLeft(2, '0')}';
 
-    final rows =
-        await _client.rpc(
+    List<dynamic> rows;
+    final cid = (clinicId ?? '').trim();
+
+    try {
+      final params = <String, dynamic>{
+        'p_doctor_id': doctorId,
+        'p_date': dateStr,
+        if (cid.isNotEmpty) 'p_clinic_id': cid,
+      };
+
+      rows = await _client.rpc('get_appointment_hour_counts', params: params)
+          as List<dynamic>;
+    } catch (e) {
+      // Backward compatibility: if the RPC doesn't support p_clinic_id yet,
+      // fallback to doctor-only counts.
+      if (cid.isNotEmpty) {
+        rows = await _client.rpc(
               'get_appointment_hour_counts',
               params: {'p_doctor_id': doctorId, 'p_date': dateStr},
             )
             as List<dynamic>;
+      } else {
+        rethrow;
+      }
+    }
 
     final out = <int, int>{};
     for (final r in rows) {
@@ -458,8 +480,207 @@ class DoctorDatabaseService {
         .upsert(payload, onConflict: 'doctor_id,day_of_week');
   }
 
+  // =====================
+  // Clinic working hours (per clinic)
+  // =====================
+  Future<List<ClinicWorkingHours>> getClinicWorkingHours({
+    required String clinicId,
+  }) async {
+    try {
+      final rows = await _client
+          .from('clinic_working_hours')
+          .select()
+          .eq('clinic_id', clinicId)
+          .order('day_of_week') as List<dynamic>;
+
+      return rows
+          .whereType<Map<String, dynamic>>()
+          .map(ClinicWorkingHours.fromJson)
+          .toList(growable: false);
+    } catch (e) {
+      final msg = e.toString().toLowerCase();
+      if (msg.contains('relation') &&
+          msg.contains('clinic_working_hours') &&
+          msg.contains('does not exist')) {
+        return const <ClinicWorkingHours>[];
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> upsertClinicWorkingHours({
+    required String clinicId,
+    required List<ClinicWorkingHours> entries,
+  }) async {
+    final payload = entries.map((e) => e.toUpsertJson()).toList();
+    await _client
+        .from('clinic_working_hours')
+        .upsert(payload, onConflict: 'clinic_id,day_of_week');
+  }
+
+  Future<void> updateClinicWorkingHoursNotes({
+    required String clinicId,
+    required String notes,
+  }) async {
+    final n = notes.trim();
+    try {
+      await _client
+          .from('clinics')
+          .update({'working_hours_notes': n.isEmpty ? null : n})
+          .eq('id', clinicId);
+    } catch (e) {
+      final msg = e.toString();
+      if (_looksLikeMissingColumn(msg, 'working_hours_notes')) {
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  // =====================
+  // Clinics (multiple)
+  // =====================
+  Future<List<Map<String, dynamic>>> getDoctorClinics({
+    required String doctorId,
+  }) async {
+    try {
+      final rows =
+          await _client
+                  .from('clinics')
+                  .select()
+                  .eq('doctor_id', doctorId)
+                  .order('created_at', ascending: true)
+              as List<dynamic>;
+
+      return rows.whereType<Map<String, dynamic>>().toList(growable: false);
+    } catch (e) {
+      final msg = e.toString().toLowerCase();
+      // If the clinics table hasn't been created yet, don't break the UI.
+      if (msg.contains('relation') &&
+          msg.contains('clinics') &&
+          msg.contains('does not exist')) {
+        return const <Map<String, dynamic>>[];
+      }
+      rethrow;
+    }
+  }
+
+  Future<String> createClinic({
+    required String doctorId,
+    String? clinicName,
+    required String center,
+    required String address,
+    String? geoLocation,
+    String? phone,
+  }) async {
+    final name = (clinicName ?? '').trim();
+    final ctr = center.trim();
+    final addr = address.trim();
+    final geo = (geoLocation ?? '').trim();
+    final ph = (phone ?? '').trim();
+
+    if (ctr.isEmpty) throw Exception('يرجى اختيار المدينة / المركز.');
+    if (addr.isEmpty) throw Exception('يرجى إدخال عنوان العيادة.');
+
+    final payload = <String, dynamic>{
+      'doctor_id': doctorId,
+      'clinic_name': name.isEmpty ? 'عيادة' : name,
+      'address': addr,
+      if (ph.isNotEmpty) 'phone': ph,
+      if (ctr.isNotEmpty) 'center': ctr,
+      if (geo.isNotEmpty) 'geo_location': geo,
+    };
+
+    try {
+      final row = await _client
+          .from('clinics')
+          .insert(payload)
+          .select('id')
+          .maybeSingle();
+
+      if (row == null) {
+        throw Exception('تعذر حفظ بيانات العيادة.');
+      }
+
+      return (row['id'] ?? '').toString();
+    } catch (e) {
+      final msg = e.toString();
+      // Backward compatibility: older schema without center/geo_location columns.
+      if (_looksLikeMissingColumn(msg, 'center') ||
+          _looksLikeMissingColumn(msg, 'geo_location')) {
+        final fallback = <String, dynamic>{
+          'doctor_id': doctorId,
+          'clinic_name': name.isEmpty ? 'عيادة' : name,
+          'address': addr,
+          if (ph.isNotEmpty) 'phone': ph,
+        };
+
+        final row = await _client
+            .from('clinics')
+            .insert(fallback)
+            .select('id')
+            .maybeSingle();
+
+        if (row == null) {
+          throw Exception('تعذر حفظ بيانات العيادة.');
+        }
+
+        return (row['id'] ?? '').toString();
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> updateClinic({
+    required String clinicId,
+    String? clinicName,
+    required String center,
+    required String address,
+    String? geoLocation,
+    String? phone,
+  }) async {
+    final name = (clinicName ?? '').trim();
+    final ctr = center.trim();
+    final addr = address.trim();
+    final geo = (geoLocation ?? '').trim();
+    final ph = (phone ?? '').trim();
+
+    if (ctr.isEmpty) throw Exception('يرجى اختيار المدينة / المركز.');
+    if (addr.isEmpty) throw Exception('يرجى إدخال عنوان العيادة.');
+
+    final update = <String, dynamic>{
+      'clinic_name': name.isEmpty ? 'عيادة' : name,
+      'address': addr,
+      'phone': ph.isEmpty ? null : ph,
+      'center': ctr,
+      'geo_location': geo.isEmpty ? null : geo,
+    };
+
+    try {
+      await _client.from('clinics').update(update).eq('id', clinicId);
+    } catch (e) {
+      final msg = e.toString();
+      if (_looksLikeMissingColumn(msg, 'center') ||
+          _looksLikeMissingColumn(msg, 'geo_location')) {
+        final fallback = <String, dynamic>{
+          'clinic_name': name.isEmpty ? 'عيادة' : name,
+          'address': addr,
+          'phone': ph.isEmpty ? null : ph,
+        };
+        await _client.from('clinics').update(fallback).eq('id', clinicId);
+        return;
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> deleteClinic({required String clinicId}) async {
+    await _client.from('clinics').delete().eq('id', clinicId);
+  }
+
   Future<void> createAppointment({
     required String doctorId,
+    String? clinicId,
     required String patientName,
     required String patientPhone,
     required DateTime appointmentDate,
@@ -469,6 +690,8 @@ class DoctorDatabaseService {
   }) async {
     final name = patientName.trim();
     final phone = patientPhone.trim();
+    final cid = (clinicId ?? '').trim();
+
     if (name.isEmpty) {
       throw Exception('يرجى إدخال اسم المريض.');
     }
@@ -484,8 +707,9 @@ class DoctorDatabaseService {
     final timeStr =
         '${appointmentTime.hour.toString().padLeft(2, '0')}:${appointmentTime.minute.toString().padLeft(2, '0')}:00';
 
-    await _client.from('appointments').insert({
+    final payload = <String, dynamic>{
       'doctor_id': doctorId,
+      if (cid.isNotEmpty) 'clinic_id': cid,
       'patient_name': name,
       'patient_phone': phone,
       'appointment_date': dateOnly.toIso8601String(),
@@ -495,7 +719,20 @@ class DoctorDatabaseService {
       'status': appointmentStatusPending,
       'created_at': DateTime.now().toIso8601String(),
       'updated_at': DateTime.now().toIso8601String(),
-    });
+    };
+
+    try {
+      await _client.from('appointments').insert(payload);
+    } catch (e) {
+      // Backward compatibility: if clinic_id column doesn't exist yet.
+      final msg = e.toString();
+      if (cid.isNotEmpty && _looksLikeMissingColumn(msg, 'clinic_id')) {
+        final fallback = Map<String, dynamic>.from(payload)..remove('clinic_id');
+        await _client.from('appointments').insert(fallback);
+        return;
+      }
+      rethrow;
+    }
   }
 
   Future<List<Map<String, dynamic>>> getAppointmentsByPatientPhone({
@@ -825,31 +1062,73 @@ class DoctorDatabaseService {
     required File imageFile,
   }) async {
     try {
+      final baseName = imageFile.path.split(Platform.pathSeparator).last;
       final fileName =
-          'gallery_${DateTime.now().millisecondsSinceEpoch}_${imageFile.path.split('/').last}';
-      final path = '$doctorId/$_galleryFolder/$fileName';
+          'gallery_${DateTime.now().millisecondsSinceEpoch}_$baseName';
+
+      // Primary path (organized under a folder).
+      final folderPath = '$doctorId/$_galleryFolder/$fileName';
+      // Fallback path (some Storage policies only allow uploads to "$uid/*" without subfolders).
+      final rootPath = '$doctorId/$fileName';
 
       final bytes = await imageFile.readAsBytes();
 
-      await _client.storage
-          .from(_doctorsBucket)
-          .uploadBinary(
-            path,
-            bytes,
-            fileOptions: const FileOptions(
-              contentType: 'image/jpeg',
-              upsert: true,
-            ),
+      Future<String> uploadTo(String path) async {
+        await _client.storage.from(_doctorsBucket).uploadBinary(
+              path,
+              bytes,
+              fileOptions: const FileOptions(
+                contentType: 'image/jpeg',
+                upsert: true,
+              ),
+            );
+        return _client.storage.from(_doctorsBucket).getPublicUrl(path);
+      }
+
+      try {
+        final imageUrl = await uploadTo(folderPath);
+        developer.log(
+          'Gallery image uploaded successfully to: $folderPath',
+          name: 'DoctorDatabaseService',
+        );
+        return imageUrl;
+      } catch (e) {
+        final msg = e.toString();
+
+        if (msg.contains('Bucket not found') ||
+            (msg.contains('bucket') && msg.contains('not found'))) {
+          throw Exception(
+            'خطأ: لم يتم العثور على Storage bucket باسم "$_doctorsBucket" داخل Supabase.',
           );
+        }
 
-      final imageUrl = _client.storage.from(_doctorsBucket).getPublicUrl(path);
+        final looksUnauthorized = msg.contains('row-level security') ||
+            msg.contains('RLS') ||
+            msg.contains('Unauthorized') ||
+            msg.contains('403') ||
+            msg.contains('not authorized');
 
-      developer.log(
-        'Gallery image uploaded successfully to: $path',
-        name: 'DoctorDatabaseService',
-      );
+        if (!looksUnauthorized) {
+          rethrow;
+        }
 
-      return imageUrl;
+        // Retry with a simpler path that often matches common Storage policies.
+        try {
+          final imageUrl = await uploadTo(rootPath);
+          developer.log(
+            'Gallery image uploaded successfully to (fallback): $rootPath',
+            name: 'DoctorDatabaseService',
+          );
+          return imageUrl;
+        } catch (e2) {
+          throw Exception(
+            'تعذر رفع صور الألبوم بسبب صلاحيات التخزين في Supabase. '
+            'تأكد من سياسات Storage للـ bucket "$_doctorsBucket" وأن المستخدم الحالي مسموح له بالرفع لمسار "${doctorId}/" و/أو "${doctorId}/$_galleryFolder/".
+'
+            'تفاصيل: ${e2.toString()}',
+          );
+        }
+      }
     } catch (e) {
       developer.log(
         'Error in uploadGalleryImage',

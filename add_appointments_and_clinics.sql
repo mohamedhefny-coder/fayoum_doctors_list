@@ -15,6 +15,7 @@ ADD COLUMN IF NOT EXISTS is_booking_enabled boolean NOT NULL DEFAULT true;
 CREATE TABLE IF NOT EXISTS public.appointments (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   doctor_id UUID NOT NULL REFERENCES public.doctors(id) ON DELETE CASCADE,
+  clinic_id UUID,
   patient_name TEXT NOT NULL,
   patient_phone TEXT NOT NULL,
   appointment_date TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -25,6 +26,10 @@ CREATE TABLE IF NOT EXISTS public.appointments (
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
+
+-- Ensure clinic_id exists for older installs before creating policies
+ALTER TABLE public.appointments
+ADD COLUMN IF NOT EXISTS clinic_id UUID;
 
 ALTER TABLE public.appointments ENABLE ROW LEVEL SECURITY;
 
@@ -43,6 +48,7 @@ BEGIN
 END $$;
 
 -- Anyone can create an appointment, but only if the doctor allows booking
+-- (Clinic validation is added later, after clinics table exists)
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -90,6 +96,9 @@ CREATE INDEX IF NOT EXISTS idx_appointments_doctor_id
 CREATE INDEX IF NOT EXISTS idx_appointments_date
   ON public.appointments(appointment_date);
 
+CREATE INDEX IF NOT EXISTS idx_appointments_clinic_id
+  ON public.appointments(clinic_id);
+
 
 -- ===============
 -- Clinics
@@ -97,11 +106,23 @@ CREATE INDEX IF NOT EXISTS idx_appointments_date
 CREATE TABLE IF NOT EXISTS public.clinics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   doctor_id UUID NOT NULL REFERENCES public.doctors(id) ON DELETE CASCADE,
-  clinic_name TEXT NOT NULL,
+  clinic_name TEXT NOT NULL DEFAULT 'عيادة',
+  center TEXT,
   address TEXT NOT NULL,
+  geo_location TEXT,
   phone TEXT,
   created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
+
+-- Ensure new clinic fields exist (for older installs)
+ALTER TABLE public.clinics
+ADD COLUMN IF NOT EXISTS center TEXT;
+
+ALTER TABLE public.clinics
+ADD COLUMN IF NOT EXISTS geo_location TEXT;
+
+ALTER TABLE public.clinics
+ALTER COLUMN clinic_name SET DEFAULT 'عيادة';
 
 ALTER TABLE public.clinics ENABLE ROW LEVEL SECURITY;
 
@@ -135,6 +156,110 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_clinics_doctor_id
   ON public.clinics(doctor_id);
+
+-- Strengthen appointment insert policy to validate clinic_id (after clinics exists)
+DROP POLICY IF EXISTS "Anyone can create an appointment when booking enabled" ON public.appointments;
+CREATE POLICY "Anyone can create an appointment when booking enabled"
+  ON public.appointments
+  FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.doctors d
+      WHERE d.id = doctor_id
+        AND COALESCE(d.is_booking_enabled, true) = true
+    )
+    AND (
+      clinic_id IS NULL
+      OR EXISTS (
+        SELECT 1
+        FROM public.clinics c
+        WHERE c.id = clinic_id
+          AND c.doctor_id = doctor_id
+      )
+    )
+  );
+
+-- Add FK for clinic_id (safe to run multiple times)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'appointments_clinic_id_fkey'
+  ) THEN
+    ALTER TABLE public.appointments
+      ADD CONSTRAINT appointments_clinic_id_fkey
+      FOREIGN KEY (clinic_id)
+      REFERENCES public.clinics(id)
+      ON DELETE SET NULL;
+  END IF;
+END $$;
+
+-- Notes per clinic (independent schedule notes)
+ALTER TABLE public.clinics
+ADD COLUMN IF NOT EXISTS working_hours_notes text;
+
+
+-- ===============
+-- Clinic working hours (per clinic)
+-- ===============
+-- day_of_week: 0=Saturday, 1=Sunday, 2=Monday, 3=Tuesday, 4=Wednesday, 5=Thursday, 6=Friday
+CREATE TABLE IF NOT EXISTS public.clinic_working_hours (
+  clinic_id uuid NOT NULL REFERENCES public.clinics (id) ON DELETE CASCADE,
+  day_of_week smallint NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+  is_enabled boolean NOT NULL DEFAULT false,
+  start_time time,
+  end_time time,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (clinic_id, day_of_week)
+);
+
+ALTER TABLE public.clinic_working_hours ENABLE ROW LEVEL SECURITY;
+
+-- Public can read clinic working hours only for published doctors
+DROP POLICY IF EXISTS "Public can view published clinics working hours" ON public.clinic_working_hours;
+CREATE POLICY "Public can view published clinics working hours"
+  ON public.clinic_working_hours
+  FOR SELECT
+  TO anon, authenticated
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.clinics c
+      JOIN public.doctors d ON d.id = c.doctor_id
+      WHERE c.id = clinic_working_hours.clinic_id
+        AND d.is_published = true
+    )
+  );
+
+-- Doctor can manage working hours for their own clinics
+DROP POLICY IF EXISTS "Doctor can manage own clinics working hours" ON public.clinic_working_hours;
+CREATE POLICY "Doctor can manage own clinics working hours"
+  ON public.clinic_working_hours
+  FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1
+      FROM public.clinics c
+      WHERE c.id = clinic_working_hours.clinic_id
+        AND c.doctor_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.clinics c
+      WHERE c.id = clinic_working_hours.clinic_id
+        AND c.doctor_id = auth.uid()
+    )
+  );
+
+CREATE INDEX IF NOT EXISTS idx_clinic_working_hours_clinic_id
+  ON public.clinic_working_hours(clinic_id);
 
 
 -- ===============

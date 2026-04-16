@@ -8,6 +8,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../deep_link_config.dart';
 import '../models/doctor_model.dart';
 import '../models/doctor_working_hours.dart';
+import '../models/clinic_working_hours.dart';
 import '../services/doctor_database_service.dart';
 import 'doctor_questions_screen.dart';
 import 'intro_video_player_screen.dart';
@@ -459,6 +460,85 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildOrganizedSection(
+                      title: 'كود QR',
+                      icon: Icons.qr_code_2,
+                      color: const Color(0xFF00BCD4),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final link = _doctorShareLink();
+                          final qrSize = (constraints.maxWidth * 0.86).clamp(
+                            260.0,
+                            360.0,
+                          );
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'امسح الكود لفتح صفحة الطبيب مباشرة.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey.shade700,
+                                  height: 1.3,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Center(
+                                child: Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(18),
+                                    border: Border.all(
+                                      color: const Color(0xFFE2E8F0),
+                                      width: 1.2,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withValues(
+                                          alpha: 0.04,
+                                        ),
+                                        blurRadius: 12,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
+                                  ),
+                                  child: QrImageView(
+                                    data: link,
+                                    size: qrSize,
+                                    backgroundColor: Colors.white,
+                                    version: QrVersions.auto,
+                                    padding: const EdgeInsets.all(10),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              SizedBox(
+                                width: double.infinity,
+                                child: ElevatedButton.icon(
+                                  onPressed: _showShareSheet,
+                                  icon: const Icon(Icons.share),
+                                  label: const Text('مشاركة كود QR'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: widget.cardColor,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 12,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(14),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
                     // قسم التخصص والمعلومات الأساسية
                     _buildOrganizedSection(
                       title: 'المعلومات الأساسية',
@@ -745,6 +825,164 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                       ),
                       const SizedBox(height: 16),
                     ],
+
+                    // عيادات/فروع إضافية
+                    FutureBuilder<List<Map<String, dynamic>>>(
+                      future: db.getDoctorClinics(doctorId: widget.doctor.id),
+                      builder: (context, snapshot) {
+                        final clinics =
+                            snapshot.data ?? const <Map<String, dynamic>>[];
+                        if (clinics.isEmpty) {
+                          return const SizedBox.shrink();
+                        }
+
+                        Widget clinicTile(Map<String, dynamic> clinic) {
+                          final name = (clinic['clinic_name'] ?? '')
+                              .toString()
+                              .trim();
+                          final center = (clinic['center'] ?? '')
+                              .toString()
+                              .trim();
+                          final address = (clinic['address'] ?? '')
+                              .toString()
+                              .trim();
+                          final geo = (clinic['geo_location'] ?? '')
+                              .toString()
+                              .trim();
+                          final phone = (clinic['phone'] ?? '')
+                              .toString()
+                              .trim();
+
+                          final mapsQuery = geo.isNotEmpty
+                              ? geo
+                              : [
+                                  center,
+                                  address,
+                                ].where((s) => s.trim().isNotEmpty).join('، ');
+
+                          final canOpen = mapsQuery.trim().isNotEmpty;
+                          final looksLikeLatLng = RegExp(
+                            r'^\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*$',
+                          ).hasMatch(geo);
+
+                          void openMap() {
+                            if (!canOpen) return;
+                            if (looksLikeLatLng) {
+                              _openMap(geo);
+                              return;
+                            }
+                            _openMapsSearch(mapsQuery);
+                          }
+
+                          return GestureDetector(
+                            onTap: canOpen ? openMap : null,
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: const Color(0xFFE0E0E0),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: widget.cardColor.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Icon(
+                                      Icons.location_on,
+                                      color: widget.cardColor,
+                                      size: 22,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          name.isEmpty ? 'عيادة' : name,
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.bold,
+                                            color: widget.cardColor,
+                                          ),
+                                        ),
+                                        if (center.isNotEmpty) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            center,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: Color(0xFF64748B),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                        if (address.isNotEmpty) ...[
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            address,
+                                            style: const TextStyle(
+                                              fontSize: 15,
+                                              color: Color(0xFF1A1A1A),
+                                            ),
+                                          ),
+                                        ],
+                                        if (phone.isNotEmpty) ...[
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            phone,
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                              color: Color(0xFF64748B),
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                                  if (canOpen)
+                                    Icon(
+                                      Icons.arrow_forward_ios,
+                                      size: 16,
+                                      color: widget.cardColor,
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }
+
+                        return Column(
+                          children: [
+                            _buildOrganizedSection(
+                              title: 'عيادات أخرى',
+                              icon: Icons.business,
+                              color: const Color(0xFFFF9800),
+                              child: Column(
+                                children: [
+                                  for (final c in clinics) ...[
+                                    clinicTile(c),
+                                    const SizedBox(height: 12),
+                                  ],
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                        );
+                      },
+                    ),
 
                     // قسم العيادة ومواعيد العمل
                     if (widget.doctor.clinicAddress != null) ...[
@@ -1910,6 +2148,23 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
     _openUrl(url);
   }
 
+  Future<void> _openMapsSearch(String query) async {
+    final q = query.trim();
+    if (q.isEmpty) return;
+
+    final uri = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(q)}',
+    );
+
+    try {
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+    } catch (_) {
+      // Ignore.
+    }
+  }
+
   void _openMap(String geoLocation) async {
     final coordinates = geoLocation.split(',');
     if (coordinates.length == 2) {
@@ -1942,7 +2197,22 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
 
     late final BuildContext pageContext;
     late final ScaffoldMessengerState messenger;
-    late final List<DoctorWorkingHours> workingHours;
+
+    final clinicOptions = <({String? id, String title, String subtitle})>[];
+    int selectedClinicIndex = 0;
+
+    List<
+      ({
+        int dayOfWeek,
+        bool isEnabled,
+        TimeOfDay? startTime,
+        TimeOfDay? endTime,
+      })
+    >
+    workingHours = const [];
+
+    bool scheduleLoading = false;
+    String? scheduleError;
 
     bool isLoading = false;
     DateTime selectedDate = DateUtils.dateOnly(DateTime.now());
@@ -1967,8 +2237,17 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
     }
 
     List<int> hoursForSelectedDate(DateTime date) {
+      if (scheduleLoading) return const <int>[];
+
       final dbDow = dayOfWeekForDb(date);
-      DoctorWorkingHours? entry;
+      ({
+        int dayOfWeek,
+        bool isEnabled,
+        TimeOfDay? startTime,
+        TimeOfDay? endTime,
+      })?
+      entry;
+
       for (final e in workingHours) {
         if (e.dayOfWeek == dbDow) {
           entry = e;
@@ -1989,7 +2268,61 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
     }
 
     try {
-      workingHours = await db.getDoctorWorkingHours(doctorId: widget.doctor.id);
+      final primarySubtitleParts = <String>[];
+      final primaryCenter = widget.doctor.location?.trim();
+      if (primaryCenter != null && primaryCenter.isNotEmpty) {
+        primarySubtitleParts.add(primaryCenter);
+      }
+      final primaryAddress = widget.doctor.clinicAddress?.trim();
+      if (primaryAddress != null && primaryAddress.isNotEmpty) {
+        primarySubtitleParts.add(primaryAddress);
+      }
+
+      clinicOptions.add((
+        id: null,
+        title: 'العيادة الأساسية',
+        subtitle: primarySubtitleParts.isEmpty
+            ? 'العيادة الأساسية'
+            : primarySubtitleParts.join(' - '),
+      ));
+
+      final extraClinics = await db.getDoctorClinics(
+        doctorId: widget.doctor.id,
+      );
+      for (final c in extraClinics) {
+        final id = (c['id'] ?? '').toString().trim();
+        if (id.isEmpty) continue;
+
+        final title = (c['clinic_name'] ?? 'عيادة').toString().trim();
+        final center = (c['center'] ?? '').toString().trim();
+        final address = (c['address'] ?? '').toString().trim();
+
+        final subtitleParts = <String>[];
+        if (center.isNotEmpty) subtitleParts.add(center);
+        if (address.isNotEmpty) subtitleParts.add(address);
+
+        clinicOptions.add((
+          id: id,
+          title: title.isEmpty ? 'عيادة' : title,
+          subtitle: subtitleParts.isEmpty
+              ? (title.isEmpty ? 'عيادة' : title)
+              : subtitleParts.join(' - '),
+        ));
+      }
+
+      final doctorRows = await db.getDoctorWorkingHours(
+        doctorId: widget.doctor.id,
+      );
+      workingHours = [
+        for (final e in doctorRows)
+          (
+            dayOfWeek: e.dayOfWeek,
+            isEnabled: e.isEnabled,
+            startTime: e.startTime,
+            endTime: e.endTime,
+          ),
+      ];
+
       pageContext = this.context;
       if (!pageContext.mounted) return;
       messenger = ScaffoldMessenger.of(pageContext);
@@ -2023,6 +2356,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                   final counts = await db.getAppointmentHourCounts(
                     doctorId: widget.doctor.id,
                     date: selectedDate,
+                    clinicId: clinicOptions[selectedClinicIndex].id,
                   );
                   setSheetState(() {
                     bookedCountsByHour = counts;
@@ -2035,6 +2369,65 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                     availabilityError = e.toString();
                     bookedCountsByHour = const {};
                     availabilityLoaded = true;
+                  });
+                }
+              }
+
+              Future<void> loadScheduleForSelectedClinic() async {
+                final clinicId = clinicOptions[selectedClinicIndex].id;
+
+                setSheetState(() {
+                  scheduleLoading = true;
+                  scheduleError = null;
+                  selectedHour = null;
+                  availabilityLoaded = false;
+                  bookedCountsByHour = const {};
+                  availabilityError = null;
+                });
+
+                try {
+                  if (clinicId == null) {
+                    final rows = await db.getDoctorWorkingHours(
+                      doctorId: widget.doctor.id,
+                    );
+                    workingHours = [
+                      for (final e in rows)
+                        (
+                          dayOfWeek: e.dayOfWeek,
+                          isEnabled: e.isEnabled,
+                          startTime: e.startTime,
+                          endTime: e.endTime,
+                        ),
+                    ];
+                  } else {
+                    final rows = await db.getClinicWorkingHours(
+                      clinicId: clinicId,
+                    );
+                    workingHours = [
+                      for (final e in rows)
+                        (
+                          dayOfWeek: e.dayOfWeek,
+                          isEnabled: e.isEnabled,
+                          startTime: e.startTime,
+                          endTime: e.endTime,
+                        ),
+                    ];
+                  }
+
+                  setSheetState(() {
+                    scheduleLoading = false;
+                  });
+
+                  await refreshAvailability();
+                } catch (e) {
+                  setSheetState(() {
+                    scheduleLoading = false;
+                    scheduleError = e.toString();
+                    workingHours = const [];
+                    bookedCountsByHour = const {};
+                    availabilityLoading = false;
+                    availabilityLoaded = true;
+                    availabilityError = null;
                   });
                 }
               }
@@ -2121,6 +2514,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
 
                   await db.createAppointment(
                     doctorId: widget.doctor.id,
+                    clinicId: clinicOptions[selectedClinicIndex].id,
                     patientName: name,
                     patientPhone: phone,
                     appointmentDate: selectedDate,
@@ -2295,6 +2689,59 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                             ),
                           ),
                           const SizedBox(height: 12),
+                          if (clinicOptions.length > 1) ...[
+                            DropdownButtonFormField<int>(
+                              value: selectedClinicIndex,
+                              decoration: const InputDecoration(
+                                labelText: 'العيادة',
+                                border: OutlineInputBorder(),
+                              ),
+                              items: [
+                                for (var i = 0; i < clinicOptions.length; i++)
+                                  DropdownMenuItem<int>(
+                                    value: i,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          clinicOptions[i].title,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                        if (clinicOptions[i].subtitle
+                                                .trim()
+                                                .isNotEmpty &&
+                                            clinicOptions[i].subtitle !=
+                                                clinicOptions[i].title)
+                                          Text(
+                                            clinicOptions[i].subtitle,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: Color(0xFF64748B),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                              onChanged: isLoading
+                                  ? null
+                                  : (v) {
+                                      if (v == null) return;
+                                      if (v == selectedClinicIndex) return;
+                                      setSheetState(() {
+                                        selectedClinicIndex = v;
+                                      });
+                                      loadScheduleForSelectedClinic();
+                                    },
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                           OutlinedButton.icon(
                             onPressed: isLoading ? null : pickDate,
                             icon: const Icon(Icons.calendar_month),
@@ -2306,6 +2753,38 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                           const SizedBox(height: 12),
                           Builder(
                             builder: (context) {
+                              if (scheduleLoading) {
+                                return const Center(
+                                  child: Padding(
+                                    padding: EdgeInsets.only(top: 6),
+                                    child: CircularProgressIndicator(),
+                                  ),
+                                );
+                              }
+
+                              if (scheduleError != null) {
+                                return Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withValues(alpha: 0.08),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.red.withValues(alpha: 0.2),
+                                    ),
+                                  ),
+                                  child: Text(
+                                    'تعذر تحميل جدول مواعيد العيادة: $scheduleError',
+                                    style: const TextStyle(
+                                      color: Colors.red,
+                                      fontSize: 12,
+                                      height: 1.3,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                );
+                              }
+
                               final hours = hoursForSelectedDate(selectedDate);
                               final cap = widget.doctor.patientsPerHour <= 0
                                   ? 1
