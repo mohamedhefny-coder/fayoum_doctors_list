@@ -1,13 +1,17 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:image_cropper/image_cropper.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:geolocator/geolocator.dart';
-import 'package:flutter/services.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:developer' as developer;
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../models/doctor_model.dart';
 import '../models/doctor_working_hours.dart';
 import '../services/doctor_database_service.dart';
@@ -65,9 +69,17 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
   String? _selectedCenter;
   String? _profileImageUrl;
+
+  // Profile image selection (File for mobile/desktop, bytes for web).
   File? _selectedImage;
+  Uint8List? _selectedImageBytes;
+  String? _selectedImageName;
+
   List<String> _galleryImageUrls = <String>[];
   List<File> _newGalleryImages = <File>[];
+  List<({Uint8List bytes, String name})> _newGalleryImagesBytes =
+      <({Uint8List bytes, String name})>[];
+
   final ImagePicker _picker = ImagePicker();
 
   String _safeExtensionFromName(String name) {
@@ -441,8 +453,12 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         _workingHoursNotesController.text = doctor.workingHoursNotes ?? '';
         _selectedSpecialization = doctor.specialization;
         _profileImageUrl = doctor.profileImageUrl;
+        _selectedImage = null;
+        _selectedImageBytes = null;
+        _selectedImageName = null;
         _galleryImageUrls = List<String>.from(doctor.galleryImageUrls ?? []);
         _newGalleryImages = <File>[];
+        _newGalleryImagesBytes = <({Uint8List bytes, String name})>[];
         _isBookingEnabled = doctor.isBookingEnabled;
         _emergency24Enabled = doctor.emergency24h;
         _homeVisitEnabled = doctor.homeVisit;
@@ -508,6 +524,21 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       final xfile = await _picker.pickImage(source: source, imageQuality: 92);
       if (xfile == null) return;
 
+      // Web: image_cropper يعتمد على platform channels (غير متاح على الويب).
+      // كذلك مسارات الملفات قد لا تكون متاحة؛ لذا نستخدم bytes مباشرة بدون قص.
+      if (kIsWeb) {
+        final bytes = await xfile.readAsBytes();
+        if (bytes.isEmpty) return;
+
+        if (!mounted) return;
+        setState(() {
+          _selectedImageBytes = bytes;
+          _selectedImageName = xfile.name;
+          _selectedImage = null;
+        });
+        return;
+      }
+
       // بعض أجهزة أندرويد (خاصة مع Photo Picker) قد تُرجع content://
       // أو مساراً غير موجود؛ ننسخ الملف إلى مسار مؤقت قبل تمريره للقص.
       sourceFile = await _xFileToLocalTempFile(
@@ -553,6 +584,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       if (!mounted) return;
       setState(() {
         _selectedImage = file;
+        _selectedImageBytes = null;
+        _selectedImageName = null;
       });
     } catch (e) {
       debugPrint('Pick/crop image failed: $e');
@@ -562,6 +595,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       if (sourceFile != null && await sourceFile.exists()) {
         setState(() {
           _selectedImage = sourceFile;
+          _selectedImageBytes = null;
+          _selectedImageName = null;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -666,6 +701,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
 
     // التحقق من الصورة الشخصية
     if (_selectedImage == null &&
+        _selectedImageBytes == null &&
         (_profileImageUrl == null || _profileImageUrl!.trim().isEmpty)) {
       messenger.showSnackBar(
         const SnackBar(
@@ -734,7 +770,24 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         }
       }
 
-      if (_selectedImage != null) {
+      if (_selectedImageBytes != null) {
+        try {
+          imageUrl = await _dbService.uploadProfileImageBytes(
+            doctorId: doctor.id,
+            bytes: _selectedImageBytes!,
+            fileName: _selectedImageName,
+          );
+        } catch (e) {
+          debugPrint('Error uploading profile image (bytes): $e');
+          messenger.hideCurrentSnackBar();
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text('تحذير: فشل رفع الصورة - $e'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      } else if (_selectedImage != null) {
         try {
           imageUrl = await _dbService.uploadProfileImage(
             doctorId: doctor.id,
@@ -762,6 +815,26 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           mergedGalleryUrls.add(url);
         } catch (e) {
           debugPrint('Error uploading gallery image: $e');
+          messenger.hideCurrentSnackBar();
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text('تحذير: فشل رفع صورة في المعرض - $e'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+
+      for (final item in _newGalleryImagesBytes) {
+        try {
+          final url = await _dbService.uploadGalleryImageBytes(
+            doctorId: doctor.id,
+            bytes: item.bytes,
+            fileName: item.name,
+          );
+          mergedGalleryUrls.add(url);
+        } catch (e) {
+          debugPrint('Error uploading gallery image (bytes): $e');
           messenger.hideCurrentSnackBar();
           messenger.showSnackBar(
             SnackBar(
@@ -846,7 +919,10 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       setState(() {
         _isEditing = false;
         _selectedImage = null;
+        _selectedImageBytes = null;
+        _selectedImageName = null;
         _newGalleryImages = <File>[];
+        _newGalleryImagesBytes = <({Uint8List bytes, String name})>[];
         _galleryImageUrls = List<String>.from(
           updatedDoctor.galleryImageUrls ?? [],
         );
@@ -1275,6 +1351,37 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       );
 
       if (images.isEmpty) return;
+
+      if (kIsWeb) {
+        final picked = <({Uint8List bytes, String name})>[];
+        for (final x in images) {
+          try {
+            final bytes = await x.readAsBytes();
+            if (bytes.isEmpty) continue;
+            final name = x.name.trim().isEmpty ? 'image.jpg' : x.name;
+            picked.add((bytes: bytes, name: name));
+          } catch (e) {
+            debugPrint('Read picked gallery image bytes failed: $e');
+          }
+        }
+
+        if (picked.isEmpty) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('تعذر قراءة الصور المختارة. جرّب اختيار صور أخرى.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+
+        if (!mounted) return;
+        setState(() {
+          _newGalleryImagesBytes.addAll(picked);
+        });
+        return;
+      }
 
       final pickedFiles = <File>[];
       for (final x in images) {
@@ -2756,7 +2863,10 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                               child: CircleAvatar(
                                 radius: 58,
                                 backgroundColor: const Color(0xFFF1F5F9),
-                                backgroundImage: _selectedImage != null
+                                backgroundImage: _selectedImageBytes != null
+                                    ? MemoryImage(_selectedImageBytes!)
+                                          as ImageProvider
+                                    : _selectedImage != null
                                     ? FileImage(_selectedImage!)
                                           as ImageProvider
                                     : _profileImageUrl != null
@@ -2764,7 +2874,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                                           as ImageProvider
                                     : null,
                                 child:
-                                    _selectedImage == null &&
+                                    _selectedImageBytes == null &&
+                                        _selectedImage == null &&
                                         _profileImageUrl == null
                                     ? Icon(
                                         Icons.person,
@@ -2803,7 +2914,9 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                           ),
                         ),
                       ),
-                      if (_selectedImage != null || _profileImageUrl != null)
+                      if (_selectedImageBytes != null ||
+                          _selectedImage != null ||
+                          _profileImageUrl != null)
                         Positioned(
                           top: 0,
                           left: 0,
@@ -2811,6 +2924,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                             onTap: () {
                               setState(() {
                                 _selectedImage = null;
+                                _selectedImageBytes = null;
+                                _selectedImageName = null;
                                 _profileImageUrl = null;
                               });
                             },
@@ -3438,31 +3553,46 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                   ],
                 ),
                 if (_galleryImageUrls.isNotEmpty ||
-                    _newGalleryImages.isNotEmpty)
+                    _newGalleryImages.isNotEmpty ||
+                    _newGalleryImagesBytes.isNotEmpty)
                   SizedBox(
                     height: 110,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
                       itemCount:
-                          _galleryImageUrls.length + _newGalleryImages.length,
+                          _galleryImageUrls.length +
+                          _newGalleryImages.length +
+                          _newGalleryImagesBytes.length,
                       separatorBuilder: (context, index) =>
                           const SizedBox(width: 8),
                       itemBuilder: (context, index) {
-                        final isExisting = index < _galleryImageUrls.length;
-                        final child = isExisting
-                            ? Image.network(
-                                _galleryImageUrls[index],
-                                fit: BoxFit.cover,
-                                errorBuilder: (context, error, stackTrace) =>
-                                    const Center(
-                                      child: Icon(Icons.broken_image),
-                                    ),
-                              )
-                            : Image.file(
-                                _newGalleryImages[index -
-                                    _galleryImageUrls.length],
-                                fit: BoxFit.cover,
-                              );
+                        final existingCount = _galleryImageUrls.length;
+                        final fileCount = _newGalleryImages.length;
+
+                        final isExisting = index < existingCount;
+                        final isFile =
+                            !isExisting && index < existingCount + fileCount;
+
+                        final Widget child;
+                        if (isExisting) {
+                          child = Image.network(
+                            _galleryImageUrls[index],
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Center(child: Icon(Icons.broken_image)),
+                          );
+                        } else if (isFile) {
+                          child = Image.file(
+                            _newGalleryImages[index - existingCount],
+                            fit: BoxFit.cover,
+                          );
+                        } else {
+                          final item =
+                              _newGalleryImagesBytes[index -
+                                  existingCount -
+                                  fileCount];
+                          child = Image.memory(item.bytes, fit: BoxFit.cover);
+                        }
 
                         return Stack(
                           children: [
@@ -3483,9 +3613,13 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                                   setState(() {
                                     if (isExisting) {
                                       _galleryImageUrls.removeAt(index);
-                                    } else {
+                                    } else if (isFile) {
                                       _newGalleryImages.removeAt(
-                                        index - _galleryImageUrls.length,
+                                        index - existingCount,
+                                      );
+                                    } else {
+                                      _newGalleryImagesBytes.removeAt(
+                                        index - existingCount - fileCount,
                                       );
                                     }
                                   });
