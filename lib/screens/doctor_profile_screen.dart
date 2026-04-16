@@ -14,6 +14,7 @@ import '../services/doctor_database_service.dart';
 import '../widgets/doctor_summary_card.dart';
 import '../constants/fayoum_locations.dart';
 import 'doctor_appointments_screen.dart';
+import 'doctor_clinics_screen.dart';
 import 'doctor_detail_screen.dart';
 import 'doctor_messages_screen.dart';
 import 'intro_video_player_screen.dart';
@@ -501,13 +502,15 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   }
 
   Future<void> _pickAndCropProfileImage(ImageSource source) async {
+    File? sourceFile;
+
     try {
       final xfile = await _picker.pickImage(source: source, imageQuality: 92);
       if (xfile == null) return;
 
       // بعض أجهزة أندرويد (خاصة مع Photo Picker) قد تُرجع content://
       // أو مساراً غير موجود؛ ننسخ الملف إلى مسار مؤقت قبل تمريره للقص.
-      final sourceFile = await _xFileToLocalTempFile(
+      sourceFile = await _xFileToLocalTempFile(
         xfile,
         prefix: 'profile_${DateTime.now().millisecondsSinceEpoch}',
       );
@@ -554,6 +557,21 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
     } catch (e) {
       debugPrint('Pick/crop image failed: $e');
       if (!mounted) return;
+
+      // fallback: اسمح باختيار الصورة بدون قص بدل ما تمنع رفع البروفايل.
+      if (sourceFile != null && await sourceFile.exists()) {
+        setState(() {
+          _selectedImage = sourceFile;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تعذر فتح أداة القص، تم اختيار الصورة بدون قص.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('تعذر فتح أداة قص الصورة: $e'),
@@ -1249,28 +1267,53 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   }
 
   Future<void> _pickGalleryImages() async {
-    final images = await _picker.pickMultiImage(
-      maxWidth: 1024,
-      maxHeight: 1024,
-      imageQuality: 85,
-    );
+    try {
+      final images = await _picker.pickMultiImage(
+        maxWidth: 1024,
+        maxHeight: 1024,
+        imageQuality: 85,
+      );
 
-    if (images.isEmpty) return;
+      if (images.isEmpty) return;
 
-    final files = await Future.wait(
-      images.map(
-        (x) => _xFileToLocalTempFile(
-          x,
-          prefix: 'gallery_${DateTime.now().millisecondsSinceEpoch}',
+      final pickedFiles = <File>[];
+      for (final x in images) {
+        try {
+          final f = await _xFileToLocalTempFile(
+            x,
+            prefix: 'gallery_${DateTime.now().millisecondsSinceEpoch}',
+          );
+          if (f != null) pickedFiles.add(f);
+        } catch (e) {
+          debugPrint('Convert picked gallery image failed: $e');
+        }
+      }
+
+      if (pickedFiles.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تعذر قراءة الصور المختارة. جرّب اختيار صور أخرى.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _newGalleryImages.addAll(pickedFiles);
+      });
+    } catch (e) {
+      debugPrint('Pick gallery images failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تعذر اختيار صور الألبوم: $e'),
+          backgroundColor: Colors.red,
         ),
-      ),
-    );
-    final pickedFiles = files.whereType<File>().toList();
-    if (pickedFiles.isEmpty) return;
-    if (!mounted) return;
-    setState(() {
-      _newGalleryImages.addAll(pickedFiles);
-    });
+      );
+    }
   }
 
   void _addService() {
@@ -3211,6 +3254,69 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                         ),
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                InkWell(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            DoctorClinicsScreen(doctorId: doctor.id),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFE2E8F0)),
+                    ),
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: const Color(
+                              0xFFEC4899,
+                            ).withValues(alpha: 0.10),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(
+                            Icons.store_mall_directory_outlined,
+                            color: Color(0xFFEC4899),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'إضافة أكثر من عيادة',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              SizedBox(height: 2),
+                              Text(
+                                'إدارة عيادات/فروع إضافية بنفس الشكل',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF64748B),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Icon(
+                          Icons.arrow_forward_ios,
+                          size: 18,
+                          color: Color(0xFF64748B),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ],
