@@ -1,7 +1,9 @@
 import 'dart:developer' as developer;
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/material.dart' show TimeOfDay;
 import 'dart:io';
+import 'dart:typed_data';
+
+import 'package:flutter/material.dart' show TimeOfDay;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/clinic_working_hours.dart';
 import '../models/doctor_model.dart';
 import '../models/doctor_working_hours.dart';
@@ -1000,6 +1002,132 @@ class DoctorDatabaseService {
         );
       }
 
+      rethrow;
+    }
+  }
+
+  String _safeStorageBaseName(String name) {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return 'image.jpg';
+
+    // Keep only the base name (avoid any path injection).
+    final slashParts = trimmed.split(RegExp(r'[\\/]+'));
+    final base = slashParts.isEmpty ? trimmed : slashParts.last;
+    final cleaned = base.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+    return cleaned.isEmpty ? 'image.jpg' : cleaned;
+  }
+
+  String _imageContentTypeFromFileName(String fileName) {
+    final lower = fileName.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    return 'image/jpeg';
+  }
+
+  String _imageExtensionFromFileName(String fileName) {
+    final lower = fileName.toLowerCase().trim();
+    final dot = lower.lastIndexOf('.');
+    if (dot == -1 || dot == lower.length - 1) return 'jpg';
+    final ext = lower.substring(dot + 1);
+    if (ext == 'png' ||
+        ext == 'webp' ||
+        ext == 'gif' ||
+        ext == 'jpg' ||
+        ext == 'jpeg') {
+      return ext == 'jpeg' ? 'jpg' : ext;
+    }
+    return 'jpg';
+  }
+
+  Future<String> uploadProfileImageBytes({
+    required String doctorId,
+    required Uint8List bytes,
+    String? fileName,
+  }) async {
+    try {
+      if (bytes.isEmpty) {
+        throw Exception('الملف فارغ.');
+      }
+
+      final safeName = _safeStorageBaseName(fileName ?? 'profile.jpg');
+      final ext = _imageExtensionFromFileName(safeName);
+      final contentType = _imageContentTypeFromFileName(safeName);
+
+      final outName =
+          'doctor_$doctorId${DateTime.now().millisecondsSinceEpoch}.$ext';
+      final path = '$doctorId/$outName';
+
+      await _client.storage
+          .from(_doctorsBucket)
+          .uploadBinary(
+            path,
+            bytes,
+            fileOptions: FileOptions(contentType: contentType, upsert: true),
+          );
+
+      return _client.storage.from(_doctorsBucket).getPublicUrl(path);
+    } catch (e) {
+      developer.log(
+        'Error in uploadProfileImageBytes',
+        name: 'DoctorDatabaseService',
+        error: e,
+      );
+      rethrow;
+    }
+  }
+
+  Future<String> uploadGalleryImageBytes({
+    required String doctorId,
+    required Uint8List bytes,
+    required String fileName,
+  }) async {
+    try {
+      if (bytes.isEmpty) {
+        throw Exception('الملف فارغ.');
+      }
+
+      final baseName = _safeStorageBaseName(fileName);
+      final contentType = _imageContentTypeFromFileName(baseName);
+      final outName =
+          'gallery_${DateTime.now().millisecondsSinceEpoch}_$baseName';
+
+      // Primary path (organized under a folder).
+      final folderPath = '$doctorId/$_galleryFolder/$outName';
+      // Fallback path (some Storage policies only allow uploads to "$uid/*" without subfolders).
+      final rootPath = '$doctorId/$outName';
+
+      Future<String> uploadTo(String path) async {
+        await _client.storage
+            .from(_doctorsBucket)
+            .uploadBinary(
+              path,
+              bytes,
+              fileOptions: FileOptions(contentType: contentType, upsert: true),
+            );
+        return _client.storage.from(_doctorsBucket).getPublicUrl(path);
+      }
+
+      try {
+        return await uploadTo(folderPath);
+      } catch (e) {
+        final msg = e.toString();
+        final looksUnauthorized =
+            msg.contains('row-level security') ||
+            msg.contains('RLS') ||
+            msg.contains('Unauthorized') ||
+            msg.contains('403') ||
+            msg.contains('not authorized');
+
+        if (!looksUnauthorized) rethrow;
+        return await uploadTo(rootPath);
+      }
+    } catch (e) {
+      developer.log(
+        'Error in uploadGalleryImageBytes',
+        name: 'DoctorDatabaseService',
+        error: e,
+      );
       rethrow;
     }
   }
