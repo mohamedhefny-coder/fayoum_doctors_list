@@ -56,80 +56,101 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
   void _showShareSheet() {
     final link = _doctorShareLink();
 
-    showModalBottomSheet(
+    showDialog<void>(
       context: context,
-      showDragHandle: true,
-      backgroundColor: Colors.white,
+      barrierDismissible: true,
       builder: (context) {
         final width = MediaQuery.of(context).size.width;
-        final qrSize = (width * 0.82).clamp(300.0, 460.0);
+        final qrSize = (width * 0.78).clamp(260.0, 420.0);
+
         return Directionality(
           textDirection: TextDirection.rtl,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text(
-                  'مشاركة صفحة الطبيب',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: const Color(0xFFE2E8F0),
-                      width: 1.2,
-                    ),
-                  ),
-                  child: RepaintBoundary(
-                    key: _qrKey,
-                    child: QrImageView(
-                      data: link,
-                      size: qrSize,
-                      backgroundColor: Colors.white,
-                      version: QrVersions.auto,
-                      padding: const EdgeInsets.all(10),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  'امسح الكود لفتح نفس صفحة الطبيب',
-                  style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      final bytes = await _captureQrPng();
-                      if (!context.mounted) return;
-                      if (bytes == null) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('تعذر إنشاء كود QR للمشاركة.'),
+          child: Dialog(
+            backgroundColor: Colors.white,
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'كود QR',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
-                        );
-                        return;
-                      }
-
-                      await Share.shareXFiles([
-                        XFile.fromData(
-                          bytes,
-                          name: 'doctor_qr.png',
-                          mimeType: 'image/png',
                         ),
-                      ], text: 'صفحة الطبيب: $link');
-                    },
-                    icon: const Icon(Icons.qr_code_2, size: 28),
-                    label: const Text('مشاركة كود QR'),
+                      ),
+                      IconButton(
+                        tooltip: 'إغلاق',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: const Color(0xFFE2E8F0),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: RepaintBoundary(
+                      key: _qrKey,
+                      child: QrImageView(
+                        data: link,
+                        size: qrSize,
+                        backgroundColor: Colors.white,
+                        version: QrVersions.auto,
+                        padding: const EdgeInsets.all(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'اضغط مشاركة لإرسال الكود أو الرابط.',
+                    style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final bytes = await _captureQrPng();
+                        if (!context.mounted) return;
+
+                        if (bytes == null) {
+                          await Share.share(link);
+                          return;
+                        }
+
+                        await Share.shareXFiles([
+                          XFile.fromData(
+                            bytes,
+                            name: 'doctor_qr.png',
+                            mimeType: 'image/png',
+                          ),
+                        ], text: 'صفحة الطبيب: $link');
+                      },
+                      icon: const Icon(Icons.share),
+                      label: const Text('مشاركة'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         );
@@ -202,30 +223,78 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 const SizedBox(height: 4),
-                Container(
-                  width: 110,
-                  height: 110,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 4),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.25),
-                        blurRadius: 18,
-                        offset: const Offset(0, 10),
+                Builder(
+                  builder: (context) {
+                    final link = _doctorShareLink();
+
+                    final profile = Container(
+                      width: 110,
+                      height: 110,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.25),
+                            blurRadius: 18,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                        image: doctor.profileImageUrl != null
+                            ? DecorationImage(
+                                image: NetworkImage(doctor.profileImageUrl!),
+                                fit: BoxFit.cover,
+                              )
+                            : null,
+                        color: doctor.profileImageUrl == null
+                            ? Colors.white
+                            : null,
                       ),
-                    ],
-                    image: doctor.profileImageUrl != null
-                        ? DecorationImage(
-                            image: NetworkImage(doctor.profileImageUrl!),
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                    color: doctor.profileImageUrl == null ? Colors.white : null,
-                  ),
-                  child: doctor.profileImageUrl == null
-                      ? const Icon(Icons.person, size: 60, color: Colors.grey)
-                      : null,
+                      child: doctor.profileImageUrl == null
+                          ? const Icon(
+                              Icons.person,
+                              size: 60,
+                              color: Colors.grey,
+                            )
+                          : null,
+                    );
+
+                    final qrPreview = InkWell(
+                      onTap: _showShareSheet,
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
+                        width: 78,
+                        height: 78,
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.85),
+                            width: 2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.18),
+                              blurRadius: 10,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: QrImageView(
+                          data: link,
+                          backgroundColor: Colors.white,
+                          version: QrVersions.auto,
+                          padding: EdgeInsets.zero,
+                        ),
+                      ),
+                    );
+
+                    return Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [profile, const SizedBox(width: 14), qrPreview],
+                    );
+                  },
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -447,7 +516,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
               backgroundColor: widget.cardColor,
               actions: [
                 IconButton(
-                  tooltip: 'مشاركة',
+                  tooltip: 'QR',
                   icon: const Icon(Icons.qr_code_2, size: 28),
                   onPressed: _showShareSheet,
                 ),
@@ -460,85 +529,6 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _buildOrganizedSection(
-                      title: 'كود QR',
-                      icon: Icons.qr_code_2,
-                      color: const Color(0xFF00BCD4),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final link = _doctorShareLink();
-                          final qrSize = (constraints.maxWidth * 0.86).clamp(
-                            260.0,
-                            360.0,
-                          );
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Text(
-                                'امسح الكود لفتح صفحة الطبيب مباشرة.',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade700,
-                                  height: 1.3,
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              Center(
-                                child: Container(
-                                  padding: const EdgeInsets.all(14),
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                      color: const Color(0xFFE2E8F0),
-                                      width: 1.2,
-                                    ),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withValues(
-                                          alpha: 0.04,
-                                        ),
-                                        blurRadius: 12,
-                                        offset: const Offset(0, 6),
-                                      ),
-                                    ],
-                                  ),
-                                  child: QrImageView(
-                                    data: link,
-                                    size: qrSize,
-                                    backgroundColor: Colors.white,
-                                    version: QrVersions.auto,
-                                    padding: const EdgeInsets.all(10),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 12),
-                              SizedBox(
-                                width: double.infinity,
-                                child: ElevatedButton.icon(
-                                  onPressed: _showShareSheet,
-                                  icon: const Icon(Icons.share),
-                                  label: const Text('مشاركة كود QR'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: widget.cardColor,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(14),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
                     // قسم التخصص والمعلومات الأساسية
                     _buildOrganizedSection(
                       title: 'المعلومات الأساسية',
