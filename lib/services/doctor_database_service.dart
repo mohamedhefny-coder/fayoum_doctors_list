@@ -1259,8 +1259,8 @@ class DoctorDatabaseService {
         } catch (e2) {
           throw Exception(
             'تعذر رفع صور الألبوم بسبب صلاحيات التخزين في Supabase. '
-            'تأكد من سياسات Storage للـ bucket "$_doctorsBucket" وأن المستخدم الحالي مسموح له بالرفع لمسار "${doctorId}/" و/أو "${doctorId}/$_galleryFolder/". '
-            'تفاصيل: ${e2.toString()}',
+            'تأكد من سياسات Storage للـ bucket "$_doctorsBucket" وأن المستخدم الحالي مسموح له بالرفع لمسار "$doctorId/" و/أو "$doctorId/$_galleryFolder/". '
+            'تفاصيل: $e2',
           );
         }
       }

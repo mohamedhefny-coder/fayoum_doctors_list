@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -518,6 +517,8 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
   }
 
   Future<void> _pickAndCropProfileImage(ImageSource source) async {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
     File? sourceFile;
 
     try {
@@ -565,7 +566,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       // لو المستخدم قفل شاشة القص أو فشلت العملية بدون Exception
       if (cropped == null) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(
             content: Text(
               'لم يتم قص الصورة (تم الإلغاء أو تعذر فتح أداة القص).',
@@ -598,7 +599,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
           _selectedImageBytes = null;
           _selectedImageName = null;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
+        messenger.showSnackBar(
           const SnackBar(
             content: Text('تعذر فتح أداة القص، تم اختيار الصورة بدون قص.'),
             backgroundColor: Colors.orange,
@@ -607,7 +608,7 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(
           content: Text('تعذر فتح أداة قص الصورة: $e'),
           backgroundColor: Colors.red,

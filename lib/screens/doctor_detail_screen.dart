@@ -8,7 +8,6 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../deep_link_config.dart';
 import '../models/doctor_model.dart';
 import '../models/doctor_working_hours.dart';
-import '../models/clinic_working_hours.dart';
 import '../services/doctor_database_service.dart';
 import 'doctor_questions_screen.dart';
 import 'intro_video_player_screen.dart';
@@ -2681,7 +2680,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                           const SizedBox(height: 12),
                           if (clinicOptions.length > 1) ...[
                             DropdownButtonFormField<int>(
-                              value: selectedClinicIndex,
+                              initialValue: selectedClinicIndex,
                               decoration: const InputDecoration(
                                 labelText: 'العيادة',
                                 border: OutlineInputBorder(),
