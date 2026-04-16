@@ -414,17 +414,19 @@ class DoctorDatabaseService {
         if (cid.isNotEmpty) 'p_clinic_id': cid,
       };
 
-      rows = await _client.rpc('get_appointment_hour_counts', params: params)
-          as List<dynamic>;
+      rows =
+          await _client.rpc('get_appointment_hour_counts', params: params)
+              as List<dynamic>;
     } catch (e) {
       // Backward compatibility: if the RPC doesn't support p_clinic_id yet,
       // fallback to doctor-only counts.
       if (cid.isNotEmpty) {
-        rows = await _client.rpc(
-              'get_appointment_hour_counts',
-              params: {'p_doctor_id': doctorId, 'p_date': dateStr},
-            )
-            as List<dynamic>;
+        rows =
+            await _client.rpc(
+                  'get_appointment_hour_counts',
+                  params: {'p_doctor_id': doctorId, 'p_date': dateStr},
+                )
+                as List<dynamic>;
       } else {
         rethrow;
       }
@@ -487,11 +489,13 @@ class DoctorDatabaseService {
     required String clinicId,
   }) async {
     try {
-      final rows = await _client
-          .from('clinic_working_hours')
-          .select()
-          .eq('clinic_id', clinicId)
-          .order('day_of_week') as List<dynamic>;
+      final rows =
+          await _client
+                  .from('clinic_working_hours')
+                  .select()
+                  .eq('clinic_id', clinicId)
+                  .order('day_of_week')
+              as List<dynamic>;
 
       return rows
           .whereType<Map<String, dynamic>>()
@@ -727,7 +731,8 @@ class DoctorDatabaseService {
       // Backward compatibility: if clinic_id column doesn't exist yet.
       final msg = e.toString();
       if (cid.isNotEmpty && _looksLikeMissingColumn(msg, 'clinic_id')) {
-        final fallback = Map<String, dynamic>.from(payload)..remove('clinic_id');
+        final fallback = Map<String, dynamic>.from(payload)
+          ..remove('clinic_id');
         await _client.from('appointments').insert(fallback);
         return;
       }
@@ -1074,7 +1079,9 @@ class DoctorDatabaseService {
       final bytes = await imageFile.readAsBytes();
 
       Future<String> uploadTo(String path) async {
-        await _client.storage.from(_doctorsBucket).uploadBinary(
+        await _client.storage
+            .from(_doctorsBucket)
+            .uploadBinary(
               path,
               bytes,
               fileOptions: const FileOptions(
@@ -1102,7 +1109,8 @@ class DoctorDatabaseService {
           );
         }
 
-        final looksUnauthorized = msg.contains('row-level security') ||
+        final looksUnauthorized =
+            msg.contains('row-level security') ||
             msg.contains('RLS') ||
             msg.contains('Unauthorized') ||
             msg.contains('403') ||
@@ -1123,8 +1131,7 @@ class DoctorDatabaseService {
         } catch (e2) {
           throw Exception(
             'تعذر رفع صور الألبوم بسبب صلاحيات التخزين في Supabase. '
-            'تأكد من سياسات Storage للـ bucket "$_doctorsBucket" وأن المستخدم الحالي مسموح له بالرفع لمسار "${doctorId}/" و/أو "${doctorId}/$_galleryFolder/".
-'
+            'تأكد من سياسات Storage للـ bucket "$_doctorsBucket" وأن المستخدم الحالي مسموح له بالرفع لمسار "${doctorId}/" و/أو "${doctorId}/$_galleryFolder/". '
             'تفاصيل: ${e2.toString()}',
           );
         }
