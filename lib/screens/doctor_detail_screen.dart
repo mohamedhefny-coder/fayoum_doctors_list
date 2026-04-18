@@ -177,325 +177,330 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
   Widget _buildHeroHeader(DoctorDatabaseService db) {
     final doctor = widget.doctor;
     final base = widget.cardColor;
+    final link = _doctorShareLink();
 
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topRight,
-              end: Alignment.bottomLeft,
-              colors: [base, _darken(base, 0.18)],
-            ),
+    final qrPreview = InkWell(
+      onTap: _showShareSheet,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        width: 78,
+        height: 78,
+        padding: const EdgeInsets.all(6),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: 0.85),
+            width: 2,
           ),
-          child: const SizedBox.expand(),
-        ),
-        Positioned(
-          top: -40,
-          right: -30,
-          child: Container(
-            width: 180,
-            height: 180,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.10),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.18),
+              blurRadius: 10,
+              offset: const Offset(0, 6),
             ),
-          ),
+          ],
         ),
-        Positioned(
-          bottom: -60,
-          left: -40,
-          child: Container(
-            width: 220,
-            height: 220,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withValues(alpha: 0.08),
-            ),
-          ),
+        child: QrImageView(
+          data: link,
+          backgroundColor: Colors.white,
+          version: QrVersions.auto,
+          padding: EdgeInsets.zero,
         ),
-        SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                const SizedBox(height: 4),
-                Builder(
-                  builder: (context) {
-                    final link = _doctorShareLink();
+      ),
+    );
 
-                    final profile = Container(
-                      width: 110,
-                      height: 110,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 4),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.25),
-                            blurRadius: 18,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                        image: doctor.profileImageUrl != null
-                            ? DecorationImage(
-                                image: NetworkImage(doctor.profileImageUrl!),
-                                fit: BoxFit.cover,
-                              )
-                            : null,
-                        color: doctor.profileImageUrl == null
-                            ? Colors.white
-                            : null,
-                      ),
-                      child: doctor.profileImageUrl == null
-                          ? const Icon(
-                              Icons.person,
-                              size: 60,
-                              color: Colors.grey,
-                            )
-                          : null,
-                    );
+    final profile = Container(
+      width: 140,
+      height: 140,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(color: Colors.white, width: 4),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.25),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+        image: doctor.profileImageUrl != null
+            ? DecorationImage(
+                image: NetworkImage(doctor.profileImageUrl!),
+                fit: BoxFit.cover,
+              )
+            : null,
+        color: doctor.profileImageUrl == null
+            ? Colors.white.withValues(alpha: 0.95)
+            : null,
+      ),
+      child: doctor.profileImageUrl == null
+          ? const Icon(Icons.person, size: 64, color: Colors.grey)
+          : null,
+    );
 
-                    final qrPreview = InkWell(
-                      onTap: _showShareSheet,
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: 78,
-                        height: 78,
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final showQr = constraints.maxHeight >= 250;
+        final showHeaderContent = constraints.maxHeight >= 310;
+
+        return Stack(
+          fit: StackFit.expand,
+          clipBehavior: Clip.hardEdge,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topRight,
+                  end: Alignment.bottomLeft,
+                  colors: [base, _darken(base, 0.18)],
+                ),
+              ),
+              child: const SizedBox.expand(),
+            ),
+            Positioned(
+              top: -40,
+              right: -30,
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.10),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -60,
+              left: -40,
+              child: Container(
+                width: 220,
+                height: 220,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.08),
+                ),
+              ),
+            ),
+            if (showQr)
+              SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Align(alignment: Alignment.topLeft, child: qrPreview),
+                ),
+              ),
+            if (showHeaderContent)
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      const SizedBox(height: 4),
+                      Center(child: profile),
+                      const SizedBox(height: 8),
+                      Text(
+                        doctor.fullName,
+                        textAlign: TextAlign.center,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.bold,
                           color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.white.withValues(alpha: 0.85),
-                            width: 2,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        alignment: WrapAlignment.center,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: 4,
+                        children: [
+                          ...List.generate(5, (index) {
+                            return GestureDetector(
+                              onTap: () {
+                                setState(() {
+                                  _userRating = index + 1.0;
+                                });
+                              },
+                              child: Icon(
+                                index <
+                                        (_userRating > 0
+                                                ? _userRating
+                                                : (doctor.rating ?? 0))
+                                            .round()
+                                    ? Icons.star
+                                    : Icons.star_border,
+                                color: Colors.amber,
+                                size: 20,
+                              ),
+                            );
+                          }),
+                          const SizedBox(width: 4),
+                          if (doctor.rating != null && doctor.rating! > 0)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.20),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                doctor.rating!.toStringAsFixed(1),
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          if (_userRating > 0) ...[
+                            const SizedBox(width: 6),
+                            SizedBox(
+                              height: 28,
+                              child: ElevatedButton(
+                                onPressed: _submitRating,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: widget.cardColor,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                    vertical: 4,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                child: const Text(
+                                  'إرسال',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      if (doctor.title != null &&
+                          doctor.title!.trim().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          doctor.title!.trim(),
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.white.withValues(alpha: 0.92),
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.18),
-                              blurRadius: 10,
-                              offset: const Offset(0, 6),
+                        ),
+                      ],
+                      const SizedBox(height: 8),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Wrap(
+                          alignment: WrapAlignment.center,
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            _Pill(
+                              icon: Icons.medical_services,
+                              label: doctor.specialization,
+                              background: Colors.white.withValues(alpha: 0.14),
+                              foreground: Colors.white,
+                            ),
+                            _Pill(
+                              icon: Icons.star,
+                              label: (doctor.rating ?? 0).toStringAsFixed(1),
+                              background: Colors.white.withValues(alpha: 0.14),
+                              foreground: Colors.white,
+                            ),
+                            _Pill(
+                              icon: doctor.isBookingEnabled
+                                  ? Icons.event_available
+                                  : Icons.event_busy,
+                              label: doctor.isBookingEnabled
+                                  ? 'حجز متاح'
+                                  : 'الحجز مغلق',
+                              background: Colors.white.withValues(alpha: 0.14),
+                              foreground: Colors.white,
+                              onTap: doctor.isBookingEnabled
+                                  ? () => _showBookingDialog(context, db)
+                                  : null,
                             ),
                           ],
                         ),
-                        child: QrImageView(
-                          data: link,
-                          backgroundColor: Colors.white,
-                          version: QrVersions.auto,
-                          padding: EdgeInsets.zero,
-                        ),
                       ),
-                    );
-
-                    return Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [profile, const SizedBox(width: 14), qrPreview],
-                    );
-                  },
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  doctor.fullName,
-                  textAlign: TextAlign.center,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  spacing: 4,
-                  children: [
-                    ...List.generate(5, (index) {
-                      return GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _userRating = index + 1.0;
-                          });
-                        },
-                        child: Icon(
-                          index <
-                                  (_userRating > 0
-                                          ? _userRating
-                                          : (doctor.rating ?? 0))
-                                      .round()
-                              ? Icons.star
-                              : Icons.star_border,
-                          color: Colors.amber,
-                          size: 20,
-                        ),
-                      );
-                    }),
-                    const SizedBox(width: 4),
-                    if (doctor.rating != null && doctor.rating! > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.20),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          doctor.rating!.toStringAsFixed(1),
-                          style: const TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
+                      const SizedBox(height: 14),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(18),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.20),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                            children: [
+                              Flexible(
+                                child: _QuickActionIcon(
+                                  icon: Icons.phone,
+                                  label: 'اتصال',
+                                  onTap: () => _makePhoneCall(doctor.phone),
+                                ),
+                              ),
+                              if (doctor.whatsappNumber != null &&
+                                  doctor.whatsappNumber!.trim().isNotEmpty)
+                                Flexible(
+                                  child: _QuickActionIcon(
+                                    icon: Icons.chat,
+                                    label: 'واتساب',
+                                    onTap: () =>
+                                        _openWhatsApp(doctor.whatsappNumber!),
+                                  ),
+                                ),
+                              if (doctor.facebookUrl != null &&
+                                  doctor.facebookUrl!.trim().isNotEmpty)
+                                Flexible(
+                                  child: _QuickActionIcon(
+                                    icon: Icons.facebook,
+                                    label: 'فيسبوك',
+                                    onTap: () => _openUrl(doctor.facebookUrl!),
+                                  ),
+                                ),
+                              if (doctor.geoLocation != null &&
+                                  doctor.geoLocation!.trim().isNotEmpty)
+                                Flexible(
+                                  child: _QuickActionIcon(
+                                    icon: Icons.place,
+                                    label: 'الموقع',
+                                    onTap: () => _openMap(doctor.geoLocation!),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ),
-                    if (_userRating > 0) ...[
-                      const SizedBox(width: 6),
-                      SizedBox(
-                        height: 28,
-                        child: ElevatedButton(
-                          onPressed: _submitRating,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: widget.cardColor,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                          ),
-                          child: const Text(
-                            'إرسال',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                if (doctor.title != null &&
-                    doctor.title!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    doctor.title!.trim(),
-                    textAlign: TextAlign.center,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.white.withValues(alpha: 0.92),
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                  child: Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      _Pill(
-                        icon: Icons.medical_services,
-                        label: doctor.specialization,
-                        background: Colors.white.withValues(alpha: 0.14),
-                        foreground: Colors.white,
-                      ),
-                      _Pill(
-                        icon: Icons.star,
-                        label: (doctor.rating ?? 0).toStringAsFixed(1),
-                        background: Colors.white.withValues(alpha: 0.14),
-                        foreground: Colors.white,
-                      ),
-                      _Pill(
-                        icon: doctor.isBookingEnabled
-                            ? Icons.event_available
-                            : Icons.event_busy,
-                        label: doctor.isBookingEnabled
-                            ? 'حجز متاح'
-                            : 'الحجز مغلق',
-                        background: Colors.white.withValues(alpha: 0.14),
-                        foreground: Colors.white,
-                        onTap: doctor.isBookingEnabled
-                            ? () => _showBookingDialog(context, db)
-                            : null,
-                      ),
+                      const SizedBox(height: 8),
                     ],
                   ),
                 ),
-                const SizedBox(height: 14),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.14),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.20),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Flexible(
-                          child: _QuickActionIcon(
-                            icon: Icons.phone,
-                            label: 'اتصال',
-                            onTap: () => _makePhoneCall(doctor.phone),
-                          ),
-                        ),
-                        if (doctor.whatsappNumber != null &&
-                            doctor.whatsappNumber!.trim().isNotEmpty)
-                          Flexible(
-                            child: _QuickActionIcon(
-                              icon: Icons.chat,
-                              label: 'واتساب',
-                              onTap: () =>
-                                  _openWhatsApp(doctor.whatsappNumber!),
-                            ),
-                          ),
-                        if (doctor.facebookUrl != null &&
-                            doctor.facebookUrl!.trim().isNotEmpty)
-                          Flexible(
-                            child: _QuickActionIcon(
-                              icon: Icons.facebook,
-                              label: 'فيسبوك',
-                              onTap: () => _openUrl(doctor.facebookUrl!),
-                            ),
-                          ),
-                        if (doctor.geoLocation != null &&
-                            doctor.geoLocation!.trim().isNotEmpty)
-                          Flexible(
-                            child: _QuickActionIcon(
-                              icon: Icons.place,
-                              label: 'الموقع',
-                              onTap: () => _openMap(doctor.geoLocation!),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        ),
-      ],
+              ),
+          ],
+        );
+      },
     );
   }
 
@@ -513,13 +518,6 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
               expandedHeight: 350,
               pinned: true,
               backgroundColor: widget.cardColor,
-              actions: [
-                IconButton(
-                  tooltip: 'QR',
-                  icon: const Icon(Icons.qr_code_2, size: 28),
-                  onPressed: _showShareSheet,
-                ),
-              ],
               flexibleSpace: FlexibleSpaceBar(background: _buildHeroHeader(db)),
             ),
             SliverToBoxAdapter(

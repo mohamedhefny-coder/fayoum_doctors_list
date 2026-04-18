@@ -20,6 +20,92 @@ class AdminService {
     }
   }
 
+  // ====== Medical supplies stores (Admin) ======
+  Future<List<Map<String, dynamic>>> getAllMedicalSuppliesStores() async {
+    try {
+      final response = await _supabase
+          .from('medical_supplies_stores')
+          .select(
+            'id,name,address,phone,whatsapp,working_hours,cover_image_url,available_supplies,gallery_image_urls,offers_and_discounts,has_delivery_service,available_contracts,geo_location,facebook_page,is_published,created_at,updated_at',
+          )
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      throw Exception('فشل تحميل متاجر المستلزمات: ${e.toString()}');
+    }
+  }
+
+  Future<Map<String, dynamic>> createMedicalSuppliesStore({
+    required Map<String, dynamic> data,
+  }) async {
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        throw Exception('يجب تسجيل الدخول كمدير أولاً');
+      }
+
+      final isAdmin = await _isUserAdmin(user.id);
+      if (!isAdmin) {
+        throw Exception('غير مصرح: هذا الحساب ليس حساب مدير');
+      }
+
+      final insertData = <String, dynamic>{
+        ...data,
+        'created_by': user.id,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      final inserted = await _supabase
+          .from('medical_supplies_stores')
+          .insert(insertData)
+          .select()
+          .single();
+
+      return Map<String, dynamic>.from(inserted);
+    } catch (e) {
+      throw Exception('فشل إضافة متجر مستلزمات: ${e.toString()}');
+    }
+  }
+
+  Future<void> updateMedicalSuppliesStoreSettings({
+    required String storeId,
+    bool? isPublished,
+  }) async {
+    try {
+      final data = <String, dynamic>{
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      if (isPublished != null) data['is_published'] = isPublished;
+
+      await _supabase
+          .from('medical_supplies_stores')
+          .update(data)
+          .eq('id', storeId);
+    } catch (e) {
+      throw Exception('فشل تحديث إعدادات المتجر: ${e.toString()}');
+    }
+  }
+
+  Future<void> deleteMedicalSuppliesStore(String storeId) async {
+    try {
+      final deleted = await _supabase
+          .from('medical_supplies_stores')
+          .delete()
+          .eq('id', storeId)
+          .select('id');
+
+      final deletedList = List<Map<String, dynamic>>.from(deleted);
+      if (deletedList.isEmpty) {
+        throw Exception(
+          'تعذر حذف المتجر (صلاحيات غير كافية أو سياسات RLS تمنع الحذف). '
+          'نفّذ create_medical_supplies_stores_table.sql على Supabase وتأكد أن حسابك مُسجل في جدول admins.',
+        );
+      }
+    } catch (e) {
+      throw Exception('فشل حذف المتجر: ${e.toString()}');
+    }
+  }
+
   Future<void> updateRadiologyCenterSettings({
     required String centerId,
     bool? isPublished,
@@ -382,6 +468,58 @@ class AdminService {
     } catch (e) {
       rethrow;
     }
+  }
+
+  // إنشاء حساب صاحب متجر مستلزمات (Auth فقط) بدون تغيير جلسة المدير
+  Future<String> createMedicalSuppliesStoreOwnerAccount({
+    required String storeName,
+    required String email,
+    required String password,
+  }) async {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) {
+      throw Exception('يجب تسجيل دخول المدير أولاً');
+    }
+
+    final isAdmin = await isCurrentUserAdmin();
+    if (!isAdmin) {
+      throw Exception('غير مصرح: هذه العملية للمدير فقط');
+    }
+
+    final isolatedAuthClient = SupabaseClient(
+      SupabaseConfig.supabaseUrl,
+      SupabaseConfig.supabaseAnonKey,
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.implicit,
+      ),
+    );
+
+    AuthResponse response;
+    try {
+      response = await isolatedAuthClient.auth.signUp(
+        email: email,
+        password: password,
+        data: {
+          'user_type': 'medical_supplies_store',
+          'store_name': storeName,
+        },
+      );
+    } on AuthApiException catch (e) {
+      if (e.statusCode == '422' && e.code == 'user_already_exists') {
+        throw Exception(
+          'هذا اليوزر مسجّل بالفعل في نظام تسجيل الدخول.\n'
+          'استخدم بريد مختلف أو احذف المستخدم من Supabase Dashboard → Authentication → Users ثم جرّب مرة أخرى.',
+        );
+      }
+      rethrow;
+    }
+
+    final user = response.user;
+    if (user == null) {
+      throw Exception('فشل إنشاء حساب المصادقة');
+    }
+
+    return user.id;
   }
 
   // الحصول على قائمة جميع الأطباء

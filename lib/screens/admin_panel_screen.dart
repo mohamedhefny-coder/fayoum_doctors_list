@@ -24,14 +24,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   final _adminService = AdminService();
   List<Map<String, dynamic>> _doctors = [];
   List<Map<String, dynamic>> _radiologyCenters = [];
+  List<Map<String, dynamic>> _medicalSuppliesStores = [];
   bool _isLoading = true;
   bool _isLoadingRadiology = true;
+  bool _isLoadingSupplies = true;
   String _searchQuery = '';
   String _statusFilter =
       'all'; // all, published, publish_requested, delete_requested, not_published
 
   String _radiologySearchQuery = '';
   String _radiologyStatusFilter = 'all'; // all, published, not_published
+
+  String _suppliesSearchQuery = '';
+  String _suppliesStatusFilter = 'all'; // all, published, not_published
 
   Future<void> _handlePreviewDoctor(String doctorId, Color cardColor) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -69,6 +74,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     super.initState();
     _loadDoctors();
     _loadRadiologyCenters();
+    _loadMedicalSuppliesStores();
     AdminRealtimeNotificationsService.startForCurrentAdmin();
   }
 
@@ -108,6 +114,294 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('خطأ في تحميل مراكز الأشعة: $e')),
       );
+    }
+  }
+
+  Future<void> _loadMedicalSuppliesStores() async {
+    if (!mounted) return;
+    setState(() => _isLoadingSupplies = true);
+    try {
+      final stores = await _adminService.getAllMedicalSuppliesStores();
+      if (!mounted) return;
+      setState(() {
+        _medicalSuppliesStores = stores;
+        _isLoadingSupplies = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingSupplies = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ في تحميل متاجر المستلزمات: $e')),
+      );
+    }
+  }
+
+  Future<void> _handleAddMedicalSuppliesStore() async {
+    final storeNameController = TextEditingController();
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+
+    try {
+      if (!mounted) return;
+
+      String? createdUserId;
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          bool obscurePassword = true;
+          bool isSaving = false;
+
+          return StatefulBuilder(
+            builder: (context, setLocalState) {
+              Future<void> createAccount() async {
+                final storeName = storeNameController.text.trim();
+                final email = emailController.text.trim();
+                final password = passwordController.text;
+
+                if (storeName.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('يرجى إدخال اسم المتجر')),
+                  );
+                  return;
+                }
+                if (email.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('يرجى إدخال اليوزر (البريد الإلكتروني)')),
+                  );
+                  return;
+                }
+                if (password.length < 6) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('كلمة المرور يجب أن تكون 6 أحرف على الأقل')),
+                  );
+                  return;
+                }
+
+                setLocalState(() => isSaving = true);
+                try {
+                  final userId = await _adminService.createMedicalSuppliesStoreOwnerAccount(
+                    storeName: storeName,
+                    email: email,
+                    password: password,
+                  );
+                  createdUserId = userId;
+                  if (context.mounted) Navigator.of(context).pop();
+                } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+                  );
+                  setLocalState(() => isSaving = false);
+                }
+              }
+
+              return Directionality(
+                textDirection: TextDirection.rtl,
+                child: AlertDialog(
+                  title: const Text('إنشاء حساب لصاحب المتجر'),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'سيستخدم صاحب المتجر هذه البيانات لتسجيل الدخول ثم إنشاء متجره وملء بياناته.',
+                          style: TextStyle(color: Color(0xFF666666)),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: storeNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'اسم المتجر *',
+                            prefixIcon: Icon(Icons.storefront),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(
+                            labelText: 'اليوزر (البريد الإلكتروني) *',
+                            prefixIcon: Icon(Icons.person_outline),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: passwordController,
+                          obscureText: obscurePassword,
+                          decoration: InputDecoration(
+                            labelText: 'كلمة المرور *',
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              onPressed: isSaving
+                                  ? null
+                                  : () => setLocalState(
+                                        () => obscurePassword = !obscurePassword,
+                                      ),
+                              icon: Icon(
+                                obscurePassword ? Icons.visibility : Icons.visibility_off,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: isSaving ? null : () => Navigator.of(context).pop(),
+                      child: const Text('إلغاء'),
+                    ),
+                    ElevatedButton(
+                      onPressed: isSaving ? null : createAccount,
+                      child: isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('إنشاء الحساب'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+
+      if (!mounted) return;
+
+      if (createdUserId != null) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => Directionality(
+            textDirection: TextDirection.rtl,
+            child: AlertDialog(
+              title: const Text('تم إنشاء الحساب بنجاح'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('اسم المتجر: ${storeNameController.text.trim()}'),
+                  Text('اليوزر: ${emailController.text.trim()}'),
+                  Text('الباسورد: ${passwordController.text}'),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'ملاحظة: سلّم هذه البيانات لصاحب المتجر ليستخدمها في تسجيل الدخول.',
+                    style: TextStyle(color: Color(0xFF666666)),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('تم'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } finally {
+      storeNameController.dispose();
+      emailController.dispose();
+      passwordController.dispose();
+    }
+  }
+
+  Future<void> _handleToggleSuppliesPublished(Map<String, dynamic> store) async {
+    final current = store['is_published'] == true;
+    final name = (store['name'] ?? '').toString();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Text(current ? 'إلغاء النشر' : 'نشر المتجر'),
+          content: Text(
+            current
+                ? 'هل تريد إلغاء نشر "$name"؟'
+                : 'هل تريد نشر "$name" ليظهر للمستخدمين؟',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(current ? 'إلغاء النشر' : 'نشر'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _adminService.updateMedicalSuppliesStoreSettings(
+          storeId: store['id'],
+          isPublished: !current,
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(!current ? 'تم نشر المتجر' : 'تم إلغاء نشر المتجر'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadMedicalSuppliesStores();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleDeleteSuppliesStore(
+    String storeId,
+    String storeName,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('تأكيد الحذف'),
+          content: Text('هل أنت متأكد من حذف متجر "$storeName"؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('حذف'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _adminService.deleteMedicalSuppliesStore(storeId);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم حذف المتجر بنجاح')),
+        );
+        _loadMedicalSuppliesStores();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في الحذف: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
@@ -1074,8 +1368,32 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       return matchesSearch && matchesFilter;
     }).toList();
 
+    final totalStores = _medicalSuppliesStores.length;
+    final publishedStores = _medicalSuppliesStores
+        .where((s) => s['is_published'] == true)
+        .length;
+
+    final filteredStores = _medicalSuppliesStores.where((store) {
+      final query = _suppliesSearchQuery.trim().toLowerCase();
+      final name = (store['name'] ?? '').toString().toLowerCase();
+      final phone = (store['phone'] ?? '').toString().toLowerCase();
+      final whatsapp = (store['whatsapp'] ?? '').toString().toLowerCase();
+
+      final matchesSearch = query.isEmpty ||
+          name.contains(query) ||
+          phone.contains(query) ||
+          whatsapp.contains(query);
+
+      final isPublished = store['is_published'] == true;
+      final matchesFilter = _suppliesStatusFilter == 'all'
+          ? true
+          : (_suppliesStatusFilter == 'published' ? isPublished : !isPublished);
+
+      return matchesSearch && matchesFilter;
+    }).toList();
+
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Directionality(
         textDirection: TextDirection.rtl,
         child: Scaffold(
@@ -1088,6 +1406,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
             tabs: [
               Tab(text: 'الأطباء'),
               Tab(text: 'مراكز أشعة'),
+              Tab(text: 'مستلزمات طبية'),
             ],
           ),
           actions: [
@@ -1110,6 +1429,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     break;
                   case 'add_radiology':
                     _handleAddRadiology();
+                    break;
+                  case 'add_supplies_store':
+                    _handleAddMedicalSuppliesStore();
                     break;
                 }
               },
@@ -1164,6 +1486,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     ],
                   ),
                 ),
+                PopupMenuItem(
+                  value: 'add_supplies_store',
+                  child: Row(
+                    children: [
+                      Icon(Icons.storefront, color: Color(0xFF2196F3)),
+                      SizedBox(width: 8),
+                      Text('إضافة متجر مستلزمات'),
+                    ],
+                  ),
+                ),
               ],
             ),
             IconButton(
@@ -1171,6 +1503,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               onPressed: () {
                 _loadDoctors();
                 _loadRadiologyCenters();
+                _loadMedicalSuppliesStores();
               },
               tooltip: 'تحديث',
             ),
@@ -1794,6 +2127,210 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                                   Icon(Icons.delete, color: Colors.red),
                                                   SizedBox(width: 8),
                                                   Text('حذف المركز'),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+
+              // ====== Medical supplies stores tab ======
+              _isLoadingSupplies
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'إجمالي متاجر المستلزمات',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Color(0xFF666666),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$totalStores',
+                                      style: const TextStyle(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF2196F3),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      children: [
+                                        _StatusPill(
+                                          label: 'منشور',
+                                          color: Colors.green,
+                                          count: publishedStores,
+                                        ),
+                                        _StatusPill(
+                                          label: 'غير منشور',
+                                          color: Colors.grey,
+                                          count: totalStores - publishedStores,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                decoration: InputDecoration(
+                                  hintText: 'بحث باسم المتجر أو رقم الهاتف أو واتساب...',
+                                  prefixIcon: const Icon(Icons.search),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                                onChanged: (value) {
+                                  setState(() => _suppliesSearchQuery = value);
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: [
+                                    _FilterChip(
+                                      label: 'الكل',
+                                      isSelected: _suppliesStatusFilter == 'all',
+                                      onTap: () => setState(() => _suppliesStatusFilter = 'all'),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _FilterChip(
+                                      label: 'منشور',
+                                      isSelected: _suppliesStatusFilter == 'published',
+                                      onTap: () => setState(() => _suppliesStatusFilter = 'published'),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _FilterChip(
+                                      label: 'غير منشور',
+                                      isSelected: _suppliesStatusFilter == 'not_published',
+                                      onTap: () => setState(() => _suppliesStatusFilter = 'not_published'),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: filteredStores.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'لا توجد نتائج مطابقة',
+                                    style: TextStyle(fontSize: 18, color: Color(0xFF666666)),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  itemCount: filteredStores.length,
+                                  itemBuilder: (context, index) {
+                                    final store = filteredStores[index];
+                                    final isPublished = store['is_published'] == true;
+                                    final name = (store['name'] ?? 'غير محدد').toString();
+                                    final phone = (store['phone'] ?? '').toString();
+                                    final whatsapp = (store['whatsapp'] ?? '').toString();
+
+                                    return Card(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      elevation: 2,
+                                      child: ListTile(
+                                        contentPadding: const EdgeInsets.all(16),
+                                        leading: const CircleAvatar(
+                                          radius: 30,
+                                          backgroundColor: Color(0xFF2196F3),
+                                          child: Icon(Icons.storefront, color: Colors.white),
+                                        ),
+                                        title: Text(
+                                          name,
+                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                        ),
+                                        subtitle: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              isPublished ? 'الحالة: منشور' : 'الحالة: غير منشور',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: isPublished ? Colors.green : Colors.grey,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            if (phone.isNotEmpty)
+                                              Text(
+                                                'الهاتف: $phone',
+                                                style: const TextStyle(fontSize: 12),
+                                              ),
+                                            if (whatsapp.isNotEmpty)
+                                              Text(
+                                                'واتساب: $whatsapp',
+                                                style: const TextStyle(fontSize: 12),
+                                              ),
+                                          ],
+                                        ),
+                                        trailing: PopupMenuButton<String>(
+                                          onSelected: (value) {
+                                            if (value == 'toggle_publish') {
+                                              _handleToggleSuppliesPublished(store);
+                                            } else if (value == 'delete') {
+                                              _handleDeleteSuppliesStore(store['id'], name);
+                                            }
+                                          },
+                                          itemBuilder: (context) => [
+                                            PopupMenuItem(
+                                              value: 'toggle_publish',
+                                              child: Row(
+                                                children: [
+                                                  const Icon(Icons.verified, color: Colors.green),
+                                                  const SizedBox(width: 8),
+                                                  Text(isPublished ? 'إلغاء النشر' : 'نشر'),
+                                                ],
+                                              ),
+                                            ),
+                                            const PopupMenuItem(
+                                              value: 'delete',
+                                              child: Row(
+                                                children: [
+                                                  Icon(Icons.delete, color: Colors.red),
+                                                  SizedBox(width: 8),
+                                                  Text('حذف المتجر'),
                                                 ],
                                               ),
                                             ),

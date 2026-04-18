@@ -21,6 +21,8 @@ import 'screens/government_hospitals_screen.dart';
 import 'screens/labs_screen.dart';
 import 'screens/radiology_screen.dart';
 import 'screens/medical_centers_screen.dart';
+import 'screens/gyms_screen.dart';
+import 'screens/medical_supplies_stores_screen.dart';
 import 'screens/pharmacies_screen.dart';
 import 'screens/search_overlay_screen.dart';
 import 'supabase_config.dart';
@@ -1397,7 +1399,12 @@ class _QuickCategories extends StatelessWidget {
   static const categoriesRow2 = [
     _QuickCategory('مستشفيات حكومية', Icons.local_hospital, Color(0xFF2196F3)),
     _QuickCategory('مستشفيات خاصة', Icons.business, Color(0xFFFF9800)),
-    _QuickCategory('مراكز طبية', Icons.medical_services, Color(0xFF00BCD4)),
+    _QuickCategory(
+      'مراكز طبية',
+      Icons.medical_services,
+      Color(0xFF00BCD4),
+      imagePath: 'assets/images/med.center.PNG',
+    ),
     _QuickCategory(
       'بنوك الدم',
       Icons.bloodtype,
@@ -1529,6 +1536,24 @@ class _QuickCategoryCard extends StatelessWidget {
         Navigator.push(
           context,
           MaterialPageRoute(builder: (_) => const PharmaciesScreen()),
+        );
+        return;
+      }
+
+      if (category.label == 'مستلزمات طبية') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const MedicalSuppliesStoresScreen(),
+          ),
+        );
+        return;
+      }
+
+      if (category.label == 'GYM') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const GymsScreen()),
         );
         return;
       }
@@ -2012,6 +2037,7 @@ class AllSpecialtiesPage extends StatelessWidget {
       FontAwesomeIcons.earListen,
       Color(0xFFFF9800),
       '',
+      imagePath: 'assets/images/ent.PNG',
     ),
     _Specialty(
       'رمد',
