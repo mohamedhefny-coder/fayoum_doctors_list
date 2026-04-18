@@ -353,6 +353,12 @@ class _MedicalCenter {
   final String address;
   final String phone;
   final String? whatsappNumber;
+  final bool bookingEnabled;
+  final List<String> bookingMethods;
+  final int? bookingPatientsPerHour;
+  final int? bookingSlotMinutes;
+  final String? bookingUrl;
+  final String? bookingNotes;
   final double rating;
   final int ratingCount;
   final String workingHours;
@@ -373,6 +379,12 @@ class _MedicalCenter {
     required this.address,
     required this.phone,
     this.whatsappNumber,
+    this.bookingEnabled = false,
+    this.bookingMethods = const <String>[],
+    this.bookingPatientsPerHour,
+    this.bookingSlotMinutes,
+    this.bookingUrl,
+    this.bookingNotes,
     required this.rating,
     required this.ratingCount,
     required this.workingHours,
@@ -569,6 +581,24 @@ class _MedicalCenterDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    String bookingSummary() {
+      if (!center.bookingEnabled) return 'الحجز غير متاح حالياً';
+
+      final parts = <String>[];
+      if (center.bookingMethods.isNotEmpty) {
+        parts.add('الطرق: ${center.bookingMethods.join('، ')}');
+      }
+      if (center.bookingPatientsPerHour != null &&
+          center.bookingPatientsPerHour! > 0) {
+        parts.add('السعة: ${center.bookingPatientsPerHour} مريض/ساعة');
+      }
+      if (center.bookingSlotMinutes != null && center.bookingSlotMinutes! > 0) {
+        parts.add('مدة الكشف: ${center.bookingSlotMinutes} دقيقة');
+      }
+
+      return parts.isEmpty ? 'الحجز متاح' : parts.join(' • ');
+    }
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
@@ -675,6 +705,33 @@ class _MedicalCenterDetailsScreen extends StatelessWidget {
                       content: center.phone,
                       onTap: () => _makePhoneCall(center.phone),
                     ),
+                    const SizedBox(height: 16),
+                    _InfoSection(
+                      icon: Icons.event_available,
+                      title: 'الحجز',
+                      content: bookingSummary(),
+                    ),
+                    if (center.bookingEnabled &&
+                        center.bookingUrl != null &&
+                        center.bookingUrl!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _InfoSection(
+                        icon: Icons.link,
+                        title: 'رابط الحجز',
+                        content: center.bookingUrl!.trim(),
+                        onTap: () => _openUrl(center.bookingUrl!.trim()),
+                      ),
+                    ],
+                    if (center.bookingEnabled &&
+                        center.bookingNotes != null &&
+                        center.bookingNotes!.trim().isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      _InfoSection(
+                        icon: Icons.info_outline,
+                        title: 'ملاحظات الحجز',
+                        content: center.bookingNotes!.trim(),
+                      ),
+                    ],
                     if (center.whatsappNumber != null &&
                         center.whatsappNumber!.trim().isNotEmpty) ...[
                       const SizedBox(height: 16),
@@ -1017,6 +1074,14 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
   final _contractsController = TextEditingController();
   final _offersController = TextEditingController();
 
+  // Booking settings
+  bool _bookingEnabled = false;
+  final Set<String> _bookingMethods = <String>{};
+  int _bookingPatientsPerHour = 4;
+  int _bookingSlotMinutes = 20;
+  final _bookingUrlController = TextEditingController();
+  final _bookingNotesController = TextEditingController();
+
   bool _submitting = false;
   bool _isUploadingCover = false;
   bool _isUploadingGallery = false;
@@ -1042,6 +1107,13 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
   ];
 
   final Color _brandColor = const Color(0xFF00BCD4);
+
+  static const List<String> _bookingMethodOptions = <String>[
+    'اتصال هاتفي',
+    'واتساب',
+    'رابط خارجي',
+    'داخل التطبيق (قريباً)',
+  ];
 
   @override
   void initState() {
@@ -1109,6 +1181,8 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
     _galleryController.dispose();
     _contractsController.dispose();
     _offersController.dispose();
+    _bookingUrlController.dispose();
+    _bookingNotesController.dispose();
     super.dispose();
   }
 
@@ -1325,6 +1399,28 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) return;
 
+    if (_bookingEnabled && _bookingMethods.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى اختيار طريقة حجز واحدة على الأقل'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    if (_bookingEnabled &&
+        _bookingMethods.contains('رابط خارجي') &&
+        _bookingUrlController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى إدخال رابط الحجز (لأن طريقة الحجز: رابط خارجي)'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _submitting = true;
     });
@@ -1336,6 +1432,17 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
       whatsappNumber: _whatsappController.text.trim().isEmpty
         ? null
         : _whatsappController.text.trim(),
+      bookingEnabled: _bookingEnabled,
+      bookingMethods: _bookingMethods.toList(),
+      bookingPatientsPerHour: _bookingEnabled ? _bookingPatientsPerHour : null,
+      bookingSlotMinutes: _bookingEnabled ? _bookingSlotMinutes : null,
+      bookingUrl: (_bookingEnabled && _bookingUrlController.text.trim().isNotEmpty)
+          ? _bookingUrlController.text.trim()
+          : null,
+      bookingNotes:
+          (_bookingEnabled && _bookingNotesController.text.trim().isNotEmpty)
+              ? _bookingNotesController.text.trim()
+              : null,
       rating: 0,
       ratingCount: 0,
       workingHours: _workingHoursController.text.trim(),
@@ -1611,6 +1718,262 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
                               if (value.isEmpty) return 'من فضلك أدخل ساعات العمل';
                               return null;
                             },
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    _cardSection(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _sectionTitleWithBadge(
+                            'إعدادات الحجز',
+                            icon: Icons.event_available,
+                            subtitle:
+                                'فعّل الحجز وحدد الطرق والسعة والمدة لعرضها للمستخدمين',
+                            badgeText: _bookingEnabled ? 'مفعّل' : 'غير مفعّل',
+                            badgeColor:
+                                _bookingEnabled ? Colors.green : Colors.grey,
+                          ),
+                          Container(
+                            decoration: BoxDecoration(
+                              color: _brandColor.withValues(alpha: 0.06),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: _brandColor.withValues(alpha: 0.12),
+                              ),
+                            ),
+                            child: SwitchListTile(
+                              value: _bookingEnabled,
+                              onChanged: (v) {
+                                setState(() {
+                                  _bookingEnabled = v;
+                                  if (!v) {
+                                    _bookingMethods.clear();
+                                    _bookingUrlController.clear();
+                                    _bookingNotesController.clear();
+                                  } else {
+                                    // اقتراح افتراضي ذكي
+                                    _bookingMethods
+                                      ..add('اتصال هاتفي')
+                                      ..add('واتساب');
+                                  }
+                                });
+                              },
+                              title: const Text(
+                                'تفعيل الحجز في المركز',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text(
+                                _bookingEnabled
+                                    ? 'سيظهر زر/معلومات الحجز للمستخدم'
+                                    : 'لن يظهر الحجز للمستخدمين',
+                                style: TextStyle(color: Colors.grey[700]),
+                              ),
+                              activeThumbColor: _brandColor,
+                              activeTrackColor:
+                                  _brandColor.withValues(alpha: 0.35),
+                            ),
+                          ),
+                          AnimatedSize(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOut,
+                            alignment: Alignment.topCenter,
+                            child: _bookingEnabled
+                                ? Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        'طرق الحجز',
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.grey[800],
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children:
+                                            _bookingMethodOptions.map((m) {
+                                          final selected =
+                                              _bookingMethods.contains(m);
+                                          return FilterChip(
+                                            label: Text(m),
+                                            selected: selected,
+                                            onSelected: (v) {
+                                              setState(() {
+                                                if (v) {
+                                                  _bookingMethods.add(m);
+                                                } else {
+                                                  _bookingMethods.remove(m);
+                                                }
+                                              });
+                                            },
+                                            selectedColor:
+                                                _brandColor.withValues(
+                                              alpha: 0.18,
+                                            ),
+                                            checkmarkColor: _brandColor,
+                                            backgroundColor: Colors.white,
+                                          );
+                                        }).toList(),
+                                      ),
+                                      const SizedBox(height: 14),
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                                border: Border.all(
+                                                  color: _brandColor
+                                                      .withValues(alpha: 0.12),
+                                                ),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    'السعة',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    '$_bookingPatientsPerHour مريض/ساعة',
+                                                    style: TextStyle(
+                                                      color: Colors.grey[700],
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                  Slider(
+                                                    value: _bookingPatientsPerHour
+                                                        .toDouble(),
+                                                    min: 1,
+                                                    max: 12,
+                                                    divisions: 11,
+                                                    label:
+                                                        '$_bookingPatientsPerHour',
+                                                    activeColor: _brandColor,
+                                                    onChanged: (v) {
+                                                      setState(() {
+                                                        _bookingPatientsPerHour =
+                                                            v.round();
+                                                      });
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Container(
+                                              padding:
+                                                  const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                borderRadius:
+                                                    BorderRadius.circular(14),
+                                                border: Border.all(
+                                                  color: _brandColor
+                                                      .withValues(alpha: 0.12),
+                                                ),
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  const Text(
+                                                    'مدة الكشف',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 8),
+                                                  DropdownButtonFormField<int>(
+                                                    key: ValueKey<int>(
+                                                      _bookingSlotMinutes,
+                                                    ),
+                                                    initialValue:
+                                                        _bookingSlotMinutes,
+                                                    decoration:
+                                                        _inputDecoration(
+                                                      label:
+                                                          'المدة بالدقائق',
+                                                      icon: Icons.timer,
+                                                    ),
+                                                    items: const [
+                                                      10,
+                                                      15,
+                                                      20,
+                                                      30,
+                                                      45,
+                                                      60
+                                                    ]
+                                                        .map(
+                                                          (m) =>
+                                                              DropdownMenuItem<
+                                                                int
+                                                              >(
+                                                            value: m,
+                                                            child: Text(
+                                                              '$m دقيقة',
+                                                            ),
+                                                          ),
+                                                        )
+                                                        .toList(),
+                                                    onChanged: (v) {
+                                                      if (v == null) return;
+                                                      setState(() {
+                                                        _bookingSlotMinutes = v;
+                                                      });
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 12),
+                                      if (_bookingMethods.contains('رابط خارجي'))
+                                        TextFormField(
+                                          controller: _bookingUrlController,
+                                          textInputAction: TextInputAction.next,
+                                          decoration: _inputDecoration(
+                                            label: 'رابط الحجز (اختياري/حسب الطريقة)',
+                                            hint: 'https://...'
+                                                ' (رابط مباشر لصفحة الحجز)',
+                                            icon: Icons.link,
+                                          ),
+                                        ),
+                                      const SizedBox(height: 12),
+                                      TextFormField(
+                                        controller: _bookingNotesController,
+                                        maxLines: 3,
+                                        decoration: _inputDecoration(
+                                          label: 'ملاحظات الحجز (اختياري)',
+                                          hint:
+                                              'مثال: يرجى الحضور قبل الموعد بـ 10 دقائق',
+                                          icon: Icons.info_outline,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : const SizedBox.shrink(),
                           ),
                         ],
                       ),

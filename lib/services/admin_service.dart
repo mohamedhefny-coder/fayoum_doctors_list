@@ -522,6 +522,58 @@ class AdminService {
     return user.id;
   }
 
+  // إنشاء حساب صاحب مركز طبي (Auth فقط) بدون تغيير جلسة المدير
+  Future<String> createMedicalCenterOwnerAccount({
+    required String centerName,
+    required String email,
+    required String password,
+  }) async {
+    final currentUser = _supabase.auth.currentUser;
+    if (currentUser == null) {
+      throw Exception('يجب تسجيل دخول المدير أولاً');
+    }
+
+    final isAdmin = await isCurrentUserAdmin();
+    if (!isAdmin) {
+      throw Exception('غير مصرح: هذه العملية للمدير فقط');
+    }
+
+    final isolatedAuthClient = SupabaseClient(
+      SupabaseConfig.supabaseUrl,
+      SupabaseConfig.supabaseAnonKey,
+      authOptions: const FlutterAuthClientOptions(
+        authFlowType: AuthFlowType.implicit,
+      ),
+    );
+
+    AuthResponse response;
+    try {
+      response = await isolatedAuthClient.auth.signUp(
+        email: email,
+        password: password,
+        data: {
+          'user_type': 'medical_center',
+          'center_name': centerName,
+        },
+      );
+    } on AuthApiException catch (e) {
+      if (e.statusCode == '422' && e.code == 'user_already_exists') {
+        throw Exception(
+          'هذا اليوزر مسجّل بالفعل في نظام تسجيل الدخول.\n'
+          'استخدم بريد مختلف أو احذف المستخدم من Supabase Dashboard → Authentication → Users ثم جرّب مرة أخرى.',
+        );
+      }
+      rethrow;
+    }
+
+    final user = response.user;
+    if (user == null) {
+      throw Exception('فشل إنشاء حساب المصادقة');
+    }
+
+    return user.id;
+  }
+
   // الحصول على قائمة جميع الأطباء
   Future<List<Map<String, dynamic>>> getAllDoctors() async {
     try {

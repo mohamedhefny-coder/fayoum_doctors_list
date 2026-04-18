@@ -311,6 +311,193 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
+  Future<void> _handleAddMedicalCenter() async {
+    final centerNameController = TextEditingController();
+    final emailController = TextEditingController();
+    final passwordController = TextEditingController();
+
+    try {
+      if (!mounted) return;
+
+      String? createdUserId;
+
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) {
+          bool obscurePassword = true;
+          bool isSaving = false;
+
+          return StatefulBuilder(
+            builder: (context, setLocalState) {
+              Future<void> createAccount() async {
+                final centerName = centerNameController.text.trim();
+                final email = emailController.text.trim();
+                final password = passwordController.text;
+
+                if (centerName.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('يرجى إدخال اسم المركز')),
+                  );
+                  return;
+                }
+                if (email.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('يرجى إدخال اليوزر (البريد الإلكتروني)'),
+                    ),
+                  );
+                  return;
+                }
+                if (password.length < 6) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
+                    ),
+                  );
+                  return;
+                }
+
+                setLocalState(() => isSaving = true);
+                try {
+                  final userId =
+                      await _adminService.createMedicalCenterOwnerAccount(
+                    centerName: centerName,
+                    email: email,
+                    password: password,
+                  );
+                  createdUserId = userId;
+                  if (context.mounted) Navigator.of(context).pop();
+                } catch (e) {
+                  if (!context.mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('خطأ: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  setLocalState(() => isSaving = false);
+                }
+              }
+
+              return Directionality(
+                textDirection: TextDirection.rtl,
+                child: AlertDialog(
+                  title: const Text('إنشاء حساب لصاحب مركز طبي'),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'سيستخدم صاحب المركز هذه البيانات لتسجيل الدخول ثم ملء بيانات مركزه.',
+                          style: TextStyle(color: Color(0xFF666666)),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: centerNameController,
+                          decoration: const InputDecoration(
+                            labelText: 'اسم المركز *',
+                            prefixIcon: Icon(Icons.medical_services),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          decoration: const InputDecoration(
+                            labelText: 'اليوزر (البريد الإلكتروني) *',
+                            prefixIcon: Icon(Icons.person_outline),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: passwordController,
+                          obscureText: obscurePassword,
+                          decoration: InputDecoration(
+                            labelText: 'كلمة المرور *',
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            suffixIcon: IconButton(
+                              onPressed: isSaving
+                                  ? null
+                                  : () => setLocalState(
+                                        () =>
+                                            obscurePassword = !obscurePassword,
+                                      ),
+                              icon: Icon(
+                                obscurePassword
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed:
+                          isSaving ? null : () => Navigator.of(context).pop(),
+                      child: const Text('إلغاء'),
+                    ),
+                    ElevatedButton(
+                      onPressed: isSaving ? null : createAccount,
+                      child: isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('إنشاء الحساب'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+
+      if (!mounted) return;
+
+      if (createdUserId != null) {
+        await showDialog<void>(
+          context: context,
+          builder: (context) => Directionality(
+            textDirection: TextDirection.rtl,
+            child: AlertDialog(
+              title: const Text('تم إنشاء الحساب بنجاح'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('اسم المركز: ${centerNameController.text.trim()}'),
+                  Text('اليوزر: ${emailController.text.trim()}'),
+                  Text('الباسورد: ${passwordController.text}'),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'ملاحظة: سلّم هذه البيانات لصاحب المركز ليستخدمها في تسجيل الدخول.',
+                    style: TextStyle(color: Color(0xFF666666)),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('تم'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
+    } finally {
+      centerNameController.dispose();
+      emailController.dispose();
+      passwordController.dispose();
+    }
+  }
+
   Future<void> _handleToggleSuppliesPublished(Map<String, dynamic> store) async {
     final current = store['is_published'] == true;
     final name = (store['name'] ?? '').toString();
@@ -1427,6 +1614,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   case 'add_hospital':
                     _handleAddHospital();
                     break;
+                  case 'add_medical_center':
+                    _handleAddMedicalCenter();
+                    break;
                   case 'add_radiology':
                     _handleAddRadiology();
                     break;
@@ -1473,6 +1663,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       Icon(Icons.local_hospital, color: Color(0xFFFF5722)),
                       SizedBox(width: 8),
                       Text('إضافة مستشفى'),
+                    ],
+                  ),
+                ),
+                PopupMenuItem(
+                  value: 'add_medical_center',
+                  child: Row(
+                    children: [
+                      Icon(Icons.medical_services, color: Color(0xFF00BCD4)),
+                      SizedBox(width: 8),
+                      Text('إضافة مركز طبي'),
                     ],
                   ),
                 ),
