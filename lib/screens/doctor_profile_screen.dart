@@ -525,16 +525,80 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
       final xfile = await _picker.pickImage(source: source, imageQuality: 92);
       if (xfile == null) return;
 
-      // Web: image_cropper يعتمد على platform channels (غير متاح على الويب).
-      // كذلك مسارات الملفات قد لا تكون متاحة؛ لذا نستخدم bytes مباشرة بدون قص.
+      // Web: ندعم القص عبر image_cropper_for_web بشرط توفير WebUiSettings.
+      // لو فشل القص/قراءة نتيجة القص لأي سبب، نعمل fallback للصورة الأصلية.
       if (kIsWeb) {
-        final bytes = await xfile.readAsBytes();
-        if (bytes.isEmpty) return;
+        final originalBytes = await xfile.readAsBytes();
+        if (originalBytes.isEmpty) return;
+
+        Uint8List finalBytes = originalBytes;
+        String finalName =
+            xfile.name.trim().isEmpty ? 'image.jpg' : xfile.name;
+
+        try {
+          final webSourcePath = xfile.path.trim();
+          if (webSourcePath.isNotEmpty) {
+            if (!mounted) return;
+            final cropped = await ImageCropper().cropImage(
+              sourcePath: webSourcePath,
+              compressFormat: ImageCompressFormat.jpg,
+              // قفل النسبة 1:1 للبروفايل
+              aspectRatio: const CropAspectRatio(ratioX: 1, ratioY: 1),
+              uiSettings: [
+                WebUiSettings(
+                  context: context,
+                  presentStyle: WebPresentStyle.dialog,
+                  size: const CropperSize(width: 420, height: 420),
+                  viewwMode: WebViewMode.mode_1,
+                  dragMode: WebDragMode.crop,
+                  barrierColor: Colors.black54,
+                  translations: const WebTranslations(
+                    title: 'قص الصورة',
+                    rotateLeftTooltip: 'تدوير 90° لليسار',
+                    rotateRightTooltip: 'تدوير 90° لليمين',
+                    cancelButton: 'إلغاء',
+                    cropButton: 'قص',
+                  ),
+                ),
+              ],
+            );
+
+            if (cropped != null) {
+              // على الويب الناتج يكون blob/object URL. نحوله إلى bytes.
+              try {
+                final data = await NetworkAssetBundle(
+                  Uri.parse(cropped.path),
+                ).load(cropped.path);
+                finalBytes = data.buffer.asUint8List();
+                if (finalName.trim().isNotEmpty) finalName = 'cropped_$finalName';
+              } catch (e) {
+                // لو تعذر قراءة blob URL، نستخدم الأصل ونخبر المستخدم.
+                if (!mounted) return;
+                messenger.showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'تعذر قراءة نتيجة قص الصورة على الويب، تم استخدام الصورة الأصلية.',
+                    ),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            }
+          }
+        } catch (e) {
+          if (!mounted) return;
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text('تعذر فتح أداة قص الصورة على الويب: $e'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
 
         if (!mounted) return;
         setState(() {
-          _selectedImageBytes = bytes;
-          _selectedImageName = xfile.name;
+          _selectedImageBytes = finalBytes;
+          _selectedImageName = finalName;
           _selectedImage = null;
         });
         return;
@@ -557,9 +621,21 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
             toolbarTitle: 'قص الصورة',
             toolbarColor: Colors.black,
             toolbarWidgetColor: Colors.white,
-            lockAspectRatio: false,
+            initAspectRatio: CropAspectRatioPreset.square,
+            lockAspectRatio: true,
+            hideBottomControls: false,
+            showCropGrid: true,
+            cropStyle: CropStyle.circle,
+            aspectRatioPresets: const [CropAspectRatioPreset.square],
           ),
-          IOSUiSettings(title: 'قص الصورة'),
+          IOSUiSettings(
+            title: 'قص الصورة',
+            aspectRatioLockEnabled: true,
+            aspectRatioPresets: const [CropAspectRatioPreset.square],
+            cropStyle: CropStyle.circle,
+            resetButtonHidden: false,
+            rotateButtonsHidden: false,
+          ),
         ],
       );
 
@@ -2864,26 +2940,40 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
                               child: CircleAvatar(
                                 radius: 58,
                                 backgroundColor: const Color(0xFFF1F5F9),
-                                backgroundImage: _selectedImageBytes != null
-                                    ? MemoryImage(_selectedImageBytes!)
-                                          as ImageProvider
-                                    : _selectedImage != null
-                                    ? FileImage(_selectedImage!)
-                                          as ImageProvider
-                                    : _profileImageUrl != null
-                                    ? NetworkImage(_profileImageUrl!)
-                                          as ImageProvider
-                                    : null,
-                                child:
-                                    _selectedImageBytes == null &&
-                                        _selectedImage == null &&
-                                        _profileImageUrl == null
-                                    ? Icon(
-                                        Icons.person,
-                                        size: 56,
-                                        color: Colors.grey[400],
-                                      )
-                                    : null,
+                                child: () {
+                                  final ImageProvider? provider =
+                                      _selectedImageBytes != null
+                                          ? MemoryImage(_selectedImageBytes!)
+                                          : _selectedImage != null
+                                          ? FileImage(_selectedImage!)
+                                          : _profileImageUrl != null
+                                          ? NetworkImage(_profileImageUrl!)
+                                          : null;
+
+                                  if (provider == null) {
+                                    return Icon(
+                                      Icons.person,
+                                      size: 56,
+                                      color: Colors.grey[400],
+                                    );
+                                  }
+
+                                  return ClipOval(
+                                    child: Image(
+                                      image: provider,
+                                      width: 116,
+                                      height: 116,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (context, error, stack) {
+                                        return Icon(
+                                          Icons.person,
+                                          size: 56,
+                                          color: Colors.grey[400],
+                                        );
+                                      },
+                                    ),
+                                  );
+                                }(),
                               ),
                             ),
                           ),

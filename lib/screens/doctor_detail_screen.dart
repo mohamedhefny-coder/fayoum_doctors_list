@@ -226,7 +226,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
         image: doctor.profileImageUrl != null
             ? DecorationImage(
                 image: NetworkImage(doctor.profileImageUrl!),
-                fit: BoxFit.cover,
+            fit: BoxFit.contain,
               )
             : null,
         color: doctor.profileImageUrl == null

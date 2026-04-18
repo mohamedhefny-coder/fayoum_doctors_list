@@ -40,6 +40,29 @@ void main() async {
   runApp(const FayoumDoctorsApp());
 }
 
+int _secretAdminTapCount = 0;
+Timer? _secretAdminTapTimer;
+const Duration _secretAdminTapWindow = Duration(milliseconds: 650);
+
+void _registerSecretAdminTap(BuildContext context) {
+  _secretAdminTapTimer?.cancel();
+  _secretAdminTapCount += 1;
+
+  if (_secretAdminTapCount >= 3) {
+    _secretAdminTapCount = 0;
+    _secretAdminTapTimer = null;
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
+    );
+    return;
+  }
+
+  _secretAdminTapTimer = Timer(_secretAdminTapWindow, () {
+    _secretAdminTapCount = 0;
+    _secretAdminTapTimer = null;
+  });
+}
+
 class FayoumDoctorsApp extends StatefulWidget {
   const FayoumDoctorsApp({super.key});
 
@@ -481,7 +504,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   currentDoctor: _currentDoctor,
                   onDoctorLogin: _loadCurrentDoctor,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 0),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Column(
@@ -759,45 +782,6 @@ class _WebSideNav extends StatelessWidget {
             ),
           ),
 
-          // ── Admin ──
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(14),
-              child: InkWell(
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
-                ),
-                borderRadius: BorderRadius.circular(14),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 12,
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.admin_panel_settings_rounded,
-                        color: AppColors.textSecondary,
-                        size: 22,
-                      ),
-                      const SizedBox(width: 14),
-                      Text(
-                        'لوحة الإدارة',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-
           const Spacer(),
 
           // ── Quick actions button ──
@@ -941,7 +925,10 @@ class _CreativeHeader extends StatelessWidget {
                 bottomLeft: Radius.circular(40),
                 bottomRight: Radius.circular(40),
               ),
-              child: Image.asset('assets/images/saqiya.jpg', fit: BoxFit.cover),
+              child: Image.asset(
+                'assets/images/saqiya.jpg',
+                fit: BoxFit.contain,
+              ),
             ),
           ),
           // طبقة تدرج لوني فوق الصورة
@@ -1015,46 +1002,32 @@ class _HeaderContent extends StatelessWidget {
                 child: CircleAvatar(
                   radius: 24,
                   backgroundColor: Colors.white.withValues(alpha: 0.95),
-                  backgroundImage: currentDoctor?.profileImageUrl != null
-                      ? NetworkImage(currentDoctor!.profileImageUrl!)
-                      : null,
-                  child: currentDoctor?.profileImageUrl == null
-                      ? Icon(Icons.person, color: AppColors.primary, size: 28)
-                      : null,
+                  child: currentDoctor?.profileImageUrl != null
+                      ? ClipOval(
+                          child: Image.network(
+                            currentDoctor!.profileImageUrl!,
+                            width: 48,
+                            height: 48,
+                            fit: BoxFit.contain,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Icon(
+                                Icons.person,
+                                color: AppColors.primary,
+                                size: 28,
+                              );
+                            },
+                          ),
+                        )
+                      : Icon(
+                          Icons.person,
+                          color: AppColors.primary,
+                          size: 28,
+                        ),
                 ),
               ),
             ),
             Row(
               children: [
-                GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => const AdminLoginScreen(),
-                      ),
-                    );
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.95),
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.1),
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: Icon(
-                      Icons.admin_panel_settings,
-                      color: AppColors.primary,
-                      size: 24,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
                 GestureDetector(
                   onTap: () {
                     Navigator.of(context).push(
@@ -1276,28 +1249,32 @@ class _HeaderContent extends StatelessWidget {
                 return Transform.translate(
                   offset: Offset(
                     -8,
-                    math.sin(floatingController.value * 2 * math.pi) * 10,
+                    8 + math.sin(floatingController.value * 2 * math.pi) * 10,
                   ),
-                  child: Container(
-                    width: 120,
-                    height: 120,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.95),
-                      borderRadius: BorderRadius.circular(25),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.2),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
+                  child: GestureDetector(
+                    onTap: () => _registerSecretAdminTap(context),
+                    child: Container(
+                      width: 86,
+                      height: 86,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.95),
+                        borderRadius: BorderRadius.circular(18),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.2),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Image.asset(
+                          'assets/images/caduceus.png',
+                          width: 86,
+                          height: 86,
+                          fit: BoxFit.contain,
                         ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(15),
-                      child: Image.asset(
-                        'assets/images/caduceus.png',
-                        fit: BoxFit.contain,
                       ),
                     ),
                   ),
@@ -1379,42 +1356,32 @@ class _ModernSearchBar extends StatelessWidget {
         ),
         child: Row(
           children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(Icons.search, color: AppColors.primary, size: 22),
+            Icon(
+              Icons.search_rounded,
+              color: AppColors.textSecondary,
+              size: 22,
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'ابحث عن طبيبك',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'التخصص، الاسم، الخدمة...',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12,
-                    ),
-                  ),
-                ],
+              child: Text(
+                'ابحث عن طبيب أو تخصص',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 14,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
+            const SizedBox(width: 12),
             Container(
-              padding: const EdgeInsets.all(10),
+              width: 42,
+              height: 42,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                   colors: [
                     AppColors.secondary,
                     AppColors.secondary.withValues(alpha: 0.8),
@@ -1458,8 +1425,18 @@ class _QuickCategories extends StatelessWidget {
   ];
 
   static const categoriesRow2 = [
-    _QuickCategory('مستشفيات حكومية', Icons.local_hospital, Color(0xFF2196F3)),
-    _QuickCategory('مستشفيات خاصة', Icons.business, Color(0xFFFF9800)),
+    _QuickCategory(
+      'مستشفيات حكومية',
+      Icons.local_hospital,
+      Color(0xFF2196F3),
+      imagePath: 'assets/images/gen.hospital.PNG',
+    ),
+    _QuickCategory(
+      'مستشفيات خاصة',
+      Icons.business,
+      Color(0xFFFF9800),
+      imagePath: 'assets/images/priv.hospital.PNG',
+    ),
     _QuickCategory(
       'مراكز طبية',
       Icons.medical_services,
@@ -1497,32 +1474,35 @@ class _QuickCategories extends StatelessWidget {
         Row(
           children: categoriesRow1.map((cat) {
             return Expanded(
+              flex: 11,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 2),
                 child: _QuickCategoryCard(category: cat),
               ),
             );
           }).toList(),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         // الصف الثاني
         Row(
           children: categoriesRow2.map((cat) {
             return Expanded(
+              flex: 11,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 2),
                 child: _QuickCategoryCard(category: cat),
               ),
             );
           }).toList(),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         // الصف الثالث
         Row(
           children: categoriesRow3.map((cat) {
             return Expanded(
+              flex: 11,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 2),
                 child: _QuickCategoryCard(category: cat),
               ),
             );
@@ -1549,7 +1529,7 @@ class _QuickCategoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const iconSize = 70.0;
+    const double iconSize = 75.0;
     final imageFit = category.label == 'GYM' ? BoxFit.cover : BoxFit.contain;
 
     void openCategory() {
@@ -1630,7 +1610,7 @@ class _QuickCategoryCard extends StatelessWidget {
         onTap: openCategory,
         borderRadius: BorderRadius.circular(16),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
+          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
           decoration: BoxDecoration(
             color: category.color.withValues(alpha: 0.1),
             borderRadius: BorderRadius.circular(16),
@@ -1640,36 +1620,37 @@ class _QuickCategoryCard extends StatelessWidget {
             ),
           ),
           child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
-                width: iconSize,
-                height: iconSize,
+                width: iconSize + 2,
+                height: iconSize + 2,
                 child: Center(
                   child: category.imagePath != null
                       ? Image.asset(
                           category.imagePath!,
-                          width: iconSize,
-                          height: iconSize,
+                          width: iconSize + 2,
+                          height: iconSize + 2,
                           fit: imageFit,
                           filterQuality: FilterQuality.high,
                           errorBuilder: (context, error, stackTrace) {
                             return Icon(
                               category.icon,
                               color: category.color,
-                              size: iconSize,
+                              size: iconSize + 2,
                             );
                           },
                         )
                       : Icon(
                           category.icon,
                           color: category.color,
-                          size: iconSize,
+                          size: iconSize + 2,
                         ),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 4),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 2),
                 child: Text(
                   category.label,
                   textAlign: TextAlign.center,

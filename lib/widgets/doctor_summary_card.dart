@@ -53,7 +53,7 @@ class DoctorSummaryCard extends StatelessWidget {
               image: doctor.profileImageUrl != null
                   ? DecorationImage(
                       image: NetworkImage(doctor.profileImageUrl!),
-                      fit: BoxFit.cover,
+                      fit: BoxFit.contain,
                     )
                   : null,
             ),
