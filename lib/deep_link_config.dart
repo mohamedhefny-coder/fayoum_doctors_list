@@ -28,3 +28,13 @@ Uri buildPublicDoctorUrl({required String doctorId}) {
     },
   );
 }
+
+Uri buildPublicMedicalCenterUrl({required String centerName}) {
+  final base = Uri.parse(kPublicWebBaseUrl);
+  return base.replace(
+    queryParameters: {
+      ...base.queryParameters,
+      'medical_center': centerName,
+    },
+  );
+}

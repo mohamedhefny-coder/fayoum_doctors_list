@@ -23,14 +23,20 @@ class AdminPanelScreen extends StatefulWidget {
 class _AdminPanelScreenState extends State<AdminPanelScreen> {
   final _adminService = AdminService();
   List<Map<String, dynamic>> _doctors = [];
+  List<Map<String, dynamic>> _medicalCenters = [];
   List<Map<String, dynamic>> _radiologyCenters = [];
   List<Map<String, dynamic>> _medicalSuppliesStores = [];
   bool _isLoading = true;
+  bool _isLoadingMedicalCenters = true;
   bool _isLoadingRadiology = true;
   bool _isLoadingSupplies = true;
   String _searchQuery = '';
   String _statusFilter =
       'all'; // all, published, publish_requested, delete_requested, not_published
+
+  String _medicalCentersSearchQuery = '';
+  String _medicalCentersStatusFilter =
+      'all'; // all, published, not_published, publish_requested
 
   String _radiologySearchQuery = '';
   String _radiologyStatusFilter = 'all'; // all, published, not_published
@@ -73,6 +79,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   void initState() {
     super.initState();
     _loadDoctors();
+    _loadMedicalCenters();
     _loadRadiologyCenters();
     _loadMedicalSuppliesStores();
     AdminRealtimeNotificationsService.startForCurrentAdmin();
@@ -95,6 +102,25 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           context,
         ).showSnackBar(SnackBar(content: Text('خطأ في تحميل البيانات: $e')));
       }
+    }
+  }
+
+  Future<void> _loadMedicalCenters() async {
+    if (!mounted) return;
+    setState(() => _isLoadingMedicalCenters = true);
+    try {
+      final centers = await _adminService.getAllMedicalCenters();
+      if (!mounted) return;
+      setState(() {
+        _medicalCenters = centers;
+        _isLoadingMedicalCenters = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoadingMedicalCenters = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ في تحميل المراكز الطبية: $e')),
+      );
     }
   }
 
@@ -720,6 +746,223 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         builder: (_) => RadiologyScreen(initialCenterName: name),
       ),
     );
+  }
+
+  Future<void> _handleApproveMedicalCenterPublishRequest(
+    Map<String, dynamic> center,
+  ) async {
+    final id = (center['id'] ?? '').toString();
+    final name = (center['name'] ?? '').toString();
+    if (id.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('قبول طلب النشر'),
+          content: Text('هل تريد قبول طلب نشر "$name"؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('قبول'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _adminService.approveMedicalCenterPublishRequest(id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم قبول طلب النشر بنجاح'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _loadMedicalCenters();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _handleRejectMedicalCenterPublishRequest(
+    Map<String, dynamic> center,
+  ) async {
+    final id = (center['id'] ?? '').toString();
+    final name = (center['name'] ?? '').toString();
+    if (id.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('رفض طلب النشر'),
+          content: Text('هل تريد رفض طلب نشر "$name"؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.orange),
+              child: const Text('رفض'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _adminService.rejectMedicalCenterPublishRequest(id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تم رفض طلب النشر')),
+      );
+      _loadMedicalCenters();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _handleToggleMedicalCenterPublished(
+    Map<String, dynamic> center,
+  ) async {
+    final current = center['is_published'] == true;
+    final name = (center['name'] ?? '').toString();
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Text(current ? 'إلغاء النشر' : 'نشر المركز'),
+          content: Text(
+            current
+                ? 'هل تريد إلغاء نشر "$name"؟'
+                : 'هل تريد نشر "$name" ليظهر للمستخدمين؟',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: Text(current ? 'إلغاء النشر' : 'نشر'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _adminService.updateMedicalCenterSettings(
+          centerId: (center['id'] ?? '').toString(),
+          isPublished: !current,
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(!current ? 'تم نشر المركز' : 'تم إلغاء نشر المركز'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadMedicalCenters();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _handleToggleMedicalCenterBooking(
+    Map<String, dynamic> center,
+  ) async {
+    final current = center['has_booking'] == true;
+    try {
+      await _adminService.updateMedicalCenterSettings(
+        centerId: (center['id'] ?? '').toString(),
+        hasBooking: !current,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(!current ? 'تم تفعيل الحجز' : 'تم إيقاف الحجز'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      _loadMedicalCenters();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  Future<void> _handleDeleteMedicalCenter(
+    String centerId,
+    String centerName,
+  ) async {
+    if (centerId.isEmpty) return;
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text('تأكيد الحذف'),
+          content: Text('هل أنت متأكد من حذف المركز الطبي "$centerName"؟'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('إلغاء'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text('حذف'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _adminService.deleteMedicalCenter(centerId);
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('تم حذف المركز الطبي بنجاح')),
+        );
+        _loadMedicalCenters();
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('خطأ في الحذف: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
   }
 
   Future<void> _handleLogout() async {
@@ -1534,6 +1777,47 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       return matchesSearch && matchesFilter;
     }).toList();
 
+    final totalMedicalCenters = _medicalCenters.length;
+    final publishedMedicalCenters = _medicalCenters
+        .where((c) => c['is_published'] == true)
+        .length;
+    final publishRequestedMedicalCenters = _medicalCenters
+        .where((c) => c['publish_requested'] == true)
+        .length;
+
+    final filteredMedicalCenters = _medicalCenters.where((center) {
+      final query = _medicalCentersSearchQuery.trim().toLowerCase();
+      final name = (center['name'] ?? '').toString().toLowerCase();
+      final phone = (center['phone'] ?? '').toString().toLowerCase();
+      final whatsapp = (center['whatsapp'] ?? '').toString().toLowerCase();
+
+      final matchesSearch = query.isEmpty ||
+          name.contains(query) ||
+          phone.contains(query) ||
+          whatsapp.contains(query);
+
+      final publishRequested = center['publish_requested'] == true;
+      final isPublished = center['is_published'] == true;
+
+      bool matchesFilter;
+      switch (_medicalCentersStatusFilter) {
+        case 'published':
+          matchesFilter = isPublished;
+          break;
+        case 'publish_requested':
+          matchesFilter = publishRequested;
+          break;
+        case 'not_published':
+          matchesFilter = !isPublished;
+          break;
+        case 'all':
+        default:
+          matchesFilter = true;
+      }
+
+      return matchesSearch && matchesFilter;
+    }).toList();
+
     final totalCenters = _radiologyCenters.length;
     final publishedCenters = _radiologyCenters
         .where((c) => c['is_published'] == true)
@@ -1580,7 +1864,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }).toList();
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Directionality(
         textDirection: TextDirection.rtl,
         child: Scaffold(
@@ -1592,6 +1876,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
           bottom: const TabBar(
             tabs: [
               Tab(text: 'الأطباء'),
+              Tab(text: 'مراكز طبية'),
               Tab(text: 'مراكز أشعة'),
               Tab(text: 'مستلزمات طبية'),
             ],
@@ -1702,6 +1987,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
               icon: const Icon(Icons.refresh),
               onPressed: () {
                 _loadDoctors();
+                _loadMedicalCenters();
                 _loadRadiologyCenters();
                 _loadMedicalSuppliesStores();
               },
@@ -2097,6 +2383,345 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                                   ],
                                                 ),
                                               ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+
+              // ====== Medical centers tab ======
+              _isLoadingMedicalCenters
+                  ? const Center(child: CircularProgressIndicator())
+                  : Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(20),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(16),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(alpha: 0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'إجمالي المراكز الطبية',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        color: Color(0xFF666666),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      '$totalMedicalCenters',
+                                      style: const TextStyle(
+                                        fontSize: 32,
+                                        fontWeight: FontWeight.bold,
+                                        color: Color(0xFF00BCD4),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 4,
+                                      children: [
+                                        _StatusPill(
+                                          label: 'طلبات نشر',
+                                          color: Colors.orange,
+                                          count: publishRequestedMedicalCenters,
+                                        ),
+                                        _StatusPill(
+                                          label: 'منشور',
+                                          color: Colors.green,
+                                          count: publishedMedicalCenters,
+                                        ),
+                                        _StatusPill(
+                                          label: 'غير منشور',
+                                          color: Colors.grey,
+                                          count:
+                                              totalMedicalCenters - publishedMedicalCenters,
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              TextField(
+                                decoration: InputDecoration(
+                                  hintText: 'بحث باسم المركز أو رقم الهاتف أو واتساب...',
+                                  prefixIcon: const Icon(Icons.search),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                ),
+                                onChanged: (value) {
+                                  setState(
+                                    () => _medicalCentersSearchQuery = value,
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 12),
+                              SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: [
+                                    _FilterChip(
+                                      label: 'الكل',
+                                      isSelected:
+                                          _medicalCentersStatusFilter == 'all',
+                                      onTap: () => setState(
+                                        () => _medicalCentersStatusFilter = 'all',
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _FilterChip(
+                                      label: 'طلبات نشر',
+                                      isSelected: _medicalCentersStatusFilter ==
+                                          'publish_requested',
+                                      onTap: () => setState(
+                                        () => _medicalCentersStatusFilter =
+                                            'publish_requested',
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _FilterChip(
+                                      label: 'منشور',
+                                      isSelected: _medicalCentersStatusFilter ==
+                                          'published',
+                                      onTap: () => setState(
+                                        () => _medicalCentersStatusFilter =
+                                            'published',
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    _FilterChip(
+                                      label: 'غير منشور',
+                                      isSelected: _medicalCentersStatusFilter ==
+                                          'not_published',
+                                      onTap: () => setState(
+                                        () => _medicalCentersStatusFilter =
+                                            'not_published',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: filteredMedicalCenters.isEmpty
+                              ? const Center(
+                                  child: Text(
+                                    'لا توجد نتائج مطابقة',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: Color(0xFF666666),
+                                    ),
+                                  ),
+                                )
+                              : ListView.builder(
+                                  padding:
+                                      const EdgeInsets.symmetric(horizontal: 16),
+                                  itemCount: filteredMedicalCenters.length,
+                                  itemBuilder: (context, index) {
+                                    final center = filteredMedicalCenters[index];
+                                    final isPublished =
+                                        center['is_published'] == true;
+                                    final hasBooking =
+                                        center['has_booking'] == true;
+                                    final publishRequested =
+                                        center['publish_requested'] == true;
+                                    final name =
+                                        (center['name'] ?? 'غير محدد').toString();
+                                    final phone = (center['phone'] ?? '').toString();
+
+                                    return Card(
+                                      margin: const EdgeInsets.only(bottom: 12),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(16),
+                                      ),
+                                      elevation: 2,
+                                      child: ListTile(
+                                        contentPadding:
+                                            const EdgeInsets.all(16),
+                                        leading: const CircleAvatar(
+                                          radius: 30,
+                                          backgroundColor: Color(0xFF00BCD4),
+                                          child: Icon(
+                                            Icons.medical_services,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                        title: Text(
+                                          name,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                        subtitle: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const SizedBox(height: 4),
+                                            if (publishRequested)
+                                              const Text(
+                                                'الحالة: طلب نشر',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: Colors.orange,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              )
+                                            else
+                                              Text(
+                                                isPublished
+                                                    ? 'الحالة: منشور'
+                                                    : 'الحالة: غير منشور',
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  color: isPublished
+                                                      ? Colors.green
+                                                      : Colors.grey,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                            Text(
+                                              hasBooking
+                                                  ? 'الحجز: مُفعّل'
+                                                  : 'الحجز: غير مُفعّل',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: hasBooking
+                                                    ? Colors.blue
+                                                    : Colors.grey,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                            Text(
+                                              'الهاتف: $phone',
+                                              style:
+                                                  const TextStyle(fontSize: 12),
+                                            ),
+                                          ],
+                                        ),
+                                        trailing: PopupMenuButton<String>(
+                                          onSelected: (value) {
+                                            if (value == 'approve_publish') {
+                                              _handleApproveMedicalCenterPublishRequest(
+                                                center,
+                                              );
+                                            } else if (value == 'reject_publish') {
+                                              _handleRejectMedicalCenterPublishRequest(
+                                                center,
+                                              );
+                                            } else if (value == 'toggle_publish') {
+                                              _handleToggleMedicalCenterPublished(center);
+                                            } else if (value == 'toggle_booking') {
+                                              _handleToggleMedicalCenterBooking(center);
+                                            } else if (value == 'delete') {
+                                              _handleDeleteMedicalCenter(
+                                                (center['id'] ?? '').toString(),
+                                                name,
+                                              );
+                                            }
+                                          },
+                                          itemBuilder: (context) => [
+                                            if (publishRequested)
+                                              const PopupMenuItem(
+                                                value: 'approve_publish',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.verified,
+                                                      color: Colors.green,
+                                                    ),
+                                                    SizedBox(width: 8),
+                                                    Text('قبول طلب النشر'),
+                                                  ],
+                                                ),
+                                              ),
+                                            if (publishRequested)
+                                              const PopupMenuItem(
+                                                value: 'reject_publish',
+                                                child: Row(
+                                                  children: [
+                                                    Icon(
+                                                      Icons.block,
+                                                      color: Colors.orange,
+                                                    ),
+                                                    SizedBox(width: 8),
+                                                    Text('رفض طلب النشر'),
+                                                  ],
+                                                ),
+                                              ),
+                                            if (publishRequested)
+                                              const PopupMenuDivider(),
+                                            PopupMenuItem(
+                                              value: 'toggle_publish',
+                                              child: Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons.verified,
+                                                    color: Colors.green,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    isPublished ? 'إلغاء النشر' : 'نشر',
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              value: 'toggle_booking',
+                                              child: Row(
+                                                children: [
+                                                  const Icon(
+                                                    Icons.event_available,
+                                                    color: Colors.blue,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Text(
+                                                    hasBooking
+                                                        ? 'إيقاف الحجز'
+                                                        : 'تفعيل الحجز',
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const PopupMenuItem(
+                                              value: 'delete',
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.delete,
+                                                    color: Colors.red,
+                                                  ),
+                                                  SizedBox(width: 8),
+                                                  Text('حذف المركز'),
+                                                ],
+                                              ),
+                                            ),
                                           ],
                                         ),
                                       ),

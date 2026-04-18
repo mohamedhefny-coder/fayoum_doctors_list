@@ -81,6 +81,12 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
       _openRadiologyCenterByName(radiologyName);
       return;
     }
+
+    final medicalCenterName = uri.queryParameters['medical_center']?.trim();
+    if (medicalCenterName != null && medicalCenterName.isNotEmpty) {
+      _openMedicalCenterByName(medicalCenterName);
+      return;
+    }
   }
 
   Future<void> _initDeepLinks() async {
@@ -112,6 +118,12 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
     final radiologyName = _extractRadiologyName(uri);
     if (radiologyName != null) {
       _openRadiologyCenterByName(radiologyName);
+      return;
+    }
+
+    final medicalCenterName = _extractMedicalCenterName(uri);
+    if (medicalCenterName != null) {
+      _openMedicalCenterByName(medicalCenterName);
     }
   }
 
@@ -165,6 +177,34 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
     return null;
   }
 
+  String? _extractMedicalCenterName(Uri uri) {
+    if (uri.scheme != 'fayoumdoctors') return null;
+
+    // Supports:
+    // - fayoumdoctors://medicalcenter?name=...
+    // - fayoumdoctors://medicalcenter/<name>
+    // - fayoumdoctors://app/medicalcenter?name=...
+    final isCenterHost = uri.host == 'medicalcenter';
+    final isCenterPath =
+        uri.pathSegments.isNotEmpty && uri.pathSegments.first == 'medicalcenter';
+    if (!isCenterHost && !isCenterPath) return null;
+
+    final fromQuery = uri.queryParameters['name']?.trim();
+    if (fromQuery != null && fromQuery.isNotEmpty) return fromQuery;
+
+    if (isCenterHost && uri.pathSegments.isNotEmpty) {
+      final name = uri.pathSegments.first.trim();
+      return name.isNotEmpty ? name : null;
+    }
+
+    if (isCenterPath && uri.pathSegments.length > 1) {
+      final name = uri.pathSegments[1].trim();
+      return name.isNotEmpty ? name : null;
+    }
+
+    return null;
+  }
+
   Future<void> _openDoctorProfile(String doctorId) async {
     if (_isHandlingLink) return;
     _isHandlingLink = true;
@@ -211,6 +251,27 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
       });
     } catch (_) {
       _showSnack('تعذر فتح صفحة مركز الأشعة.');
+    } finally {
+      _isHandlingLink = false;
+    }
+  }
+
+  Future<void> _openMedicalCenterByName(String name) async {
+    if (_isHandlingLink) return;
+    _isHandlingLink = true;
+
+    try {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final nav = _navigatorKey.currentState;
+        if (nav == null) return;
+        nav.push(
+          MaterialPageRoute(
+            builder: (_) => MedicalCentersScreen(initialCenterName: name),
+          ),
+        );
+      });
+    } catch (_) {
+      _showSnack('تعذر فتح صفحة المركز الطبي.');
     } finally {
       _isHandlingLink = false;
     }

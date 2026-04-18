@@ -1,13 +1,21 @@
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 import '../constants/doctor_specialties.dart';
+import '../deep_link_config.dart';
 import '../services/medical_centers_media_service.dart';
 
 class MedicalCentersScreen extends StatefulWidget {
-  const MedicalCentersScreen({super.key});
+  const MedicalCentersScreen({super.key, this.initialCenterName});
+
+  final String? initialCenterName;
 
   @override
   State<MedicalCentersScreen> createState() => _MedicalCentersScreenState();
@@ -27,48 +35,7 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
 
   final Set<String> _selectedServices = <String>{};
 
-  late final List<_MedicalCenter> _allCenters = <_MedicalCenter>[
-    _MedicalCenter(
-      name: 'مركز طبي الفيوم',
-      address: 'الفيوم - شارع الحرية - بجوار البنك الأهلي',
-      phone: '084-6340000',
-      whatsappNumber: '01000000000',
-      rating: 4.6,
-      ratingCount: 95,
-      workingHours: 'يومياً 9 ص - 11 م',
-      specialties: [
-        'باطنة',
-        'أطفال',
-        'نساء وتوليد',
-        'جراحة عامة',
-        'عظام',
-        'أنف وأذن وحنجرة',
-        'جلدية',
-        'أسنان',
-      ],
-      services: [
-        'عيادات خارجية',
-        'عيادات طوارئ 24 ساعة',
-        'معمل تحاليل',
-        'أشعة وموجات صوتية',
-        'صيدلية',
-        'عمليات يومية',
-      ],
-      features: [
-        'أطباء استشاريين',
-        'أجهزة حديثة',
-        'خدمة 24 ساعة',
-        'أسعار مناسبة',
-        'نتائج سريعة',
-      ],
-      geoLocation: '29.3084, 30.8428',
-      facebookPage: 'https://facebook.com/',
-      availableContracts: 'تأمين/نقابات/شركات (حسب التوفر)',
-      offersAndDiscounts: 'خصومات موسمية وعروض على الكشف والتحاليل',
-      icon: Icons.medical_services,
-      color: const Color(0xFF00BCD4),
-    ),
-  ];
+  late final List<_MedicalCenter> _allCenters = <_MedicalCenter>[];
 
   @override
   void initState() {
@@ -77,6 +44,100 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..forward();
+
+    final initial = widget.initialCenterName?.trim();
+    if (initial != null && initial.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _openCenterFromInitialName(initial);
+      });
+    }
+  }
+
+  Future<void> _openCenterFromInitialName(String name) async {
+    final normalized = name.trim();
+    if (normalized.isEmpty) return;
+
+    final match = _allCenters.cast<_MedicalCenter?>().firstWhere(
+          (c) => c != null && c.name.trim() == normalized,
+          orElse: () => null,
+        );
+
+    if (match != null) {
+      _openDetails(match);
+      return;
+    }
+
+    _MedicalCenter? fetched;
+    try {
+      fetched = await _fetchPublishedCenterByName(normalized);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر تحميل بيانات المركز من الخادم.')),
+      );
+      return;
+    }
+    if (!mounted) return;
+    if (fetched == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('لم يتم العثور على المركز المطلوب.')),
+      );
+      return;
+    }
+
+    setState(() {
+      _allCenters.insert(0, fetched);
+    });
+    _openDetails(fetched);
+  }
+
+  _MedicalCenter _mapDbRowToMedicalCenter(Map<String, dynamic> row) {
+    final galleryRaw = row['gallery_image_urls'];
+    final gallery = (galleryRaw is List)
+        ? galleryRaw.whereType<String>().toList()
+        : const <String>[];
+
+    return _MedicalCenter(
+      name: (row['name'] as String?)?.trim() ?? 'مركز طبي',
+      address: (row['address'] as String?)?.trim() ?? '',
+      phone: (row['phone'] as String?)?.trim() ?? '',
+      whatsappNumber: (row['whatsapp'] as String?)?.trim(),
+      rating: 0,
+      ratingCount: 0,
+      workingHours: (row['working_hours'] as String?)?.trim() ?? 'غير محدد',
+      specialties: const <String>[],
+      services: const <String>[],
+      features: const <String>[],
+      geoLocation: (row['geo_location'] as String?)?.trim(),
+      facebookPage: (row['facebook_page'] as String?)?.trim(),
+      coverImageUrl: (row['cover_image_url'] as String?)?.trim(),
+      galleryImageUrls: gallery,
+      availableContracts: (row['available_contracts'] as String?)?.trim(),
+      offersAndDiscounts: (row['offers_and_discounts'] as String?)?.trim(),
+      bookingEnabled: row['has_booking'] == true,
+      icon: Icons.medical_services,
+      color: const Color(0xFF00BCD4),
+    );
+  }
+
+  Future<_MedicalCenter?> _fetchPublishedCenterByName(String name) async {
+    final rows = await Supabase.instance.client
+        .from('medical_centers')
+        .select(
+          'name,address,phone,whatsapp,working_hours,geo_location,facebook_page,cover_image_url,gallery_image_urls,available_contracts,offers_and_discounts,has_booking',
+        )
+        .eq('is_published', true)
+        .eq('name', name)
+        .limit(1);
+
+    if (rows is List && rows.isNotEmpty) {
+      final first = rows.first;
+      if (first is Map<String, dynamic>) {
+        return _mapDbRowToMedicalCenter(first);
+      }
+    }
+    return null;
   }
 
   @override
@@ -318,7 +379,9 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
                                 ),
                                 const SizedBox(height: 16),
                                 Text(
-                                  'لا توجد مراكز مطابقة للفلاتر المحددة',
+                                  _allCenters.isEmpty
+                                      ? 'لا توجد مراكز طبية بعد'
+                                      : 'لا توجد مراكز مطابقة للفلاتر المحددة',
                                   style: TextStyle(
                                     fontSize: 16,
                                     color: Colors.grey[600],
@@ -579,6 +642,7 @@ class _MedicalCenter {
   final String address;
   final String phone;
   final String? whatsappNumber;
+  final List<Map<String, String>> doctors;
   final bool bookingEnabled;
   final List<String> bookingMethods;
   final int? bookingPatientsPerHour;
@@ -605,6 +669,7 @@ class _MedicalCenter {
     required this.address,
     required this.phone,
     this.whatsappNumber,
+    this.doctors = const <Map<String, String>>[],
     this.bookingEnabled = false,
     this.bookingMethods = const <String>[],
     this.bookingPatientsPerHour,
@@ -759,10 +824,140 @@ class _MedicalCenterCard extends StatelessWidget {
   }
 }
 
-class _MedicalCenterDetailsScreen extends StatelessWidget {
+class _MedicalCenterDetailsScreen extends StatefulWidget {
   const _MedicalCenterDetailsScreen({required this.center});
 
   final _MedicalCenter center;
+
+  @override
+  State<_MedicalCenterDetailsScreen> createState() =>
+      _MedicalCenterDetailsScreenState();
+}
+
+class _MedicalCenterDetailsScreenState extends State<_MedicalCenterDetailsScreen> {
+  final GlobalKey _qrKey = GlobalKey();
+
+  String _centerShareLink() {
+    return buildPublicMedicalCenterUrl(centerName: widget.center.name)
+        .toString();
+  }
+
+  Future<Uint8List?> _captureQrPng() async {
+    final boundary = _qrKey.currentContext?.findRenderObject();
+    if (boundary == null) return null;
+    try {
+      final image = await (boundary as dynamic).toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      return byteData?.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _showShareSheet() {
+    final link = _centerShareLink();
+
+    showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (context) {
+        final width = MediaQuery.of(context).size.width;
+        final qrSize = (width * 0.78).clamp(260.0, 420.0);
+
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: Dialog(
+            backgroundColor: Colors.white,
+            insetPadding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 24,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'كود QR',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'إغلاق',
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: const Color(0xFFE2E8F0),
+                        width: 1.2,
+                      ),
+                    ),
+                    child: RepaintBoundary(
+                      key: _qrKey,
+                      child: QrImageView(
+                        data: link,
+                        size: qrSize,
+                        backgroundColor: Colors.white,
+                        version: QrVersions.auto,
+                        padding: const EdgeInsets.all(10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    'اضغط مشاركة لإرسال الكود أو الرابط.',
+                    style: TextStyle(color: Colors.grey.shade700, fontSize: 12),
+                  ),
+                  const SizedBox(height: 14),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final bytes = await _captureQrPng();
+                        if (!context.mounted) return;
+
+                        if (bytes == null) {
+                          await Share.share(link);
+                          return;
+                        }
+
+                        await Share.shareXFiles([
+                          XFile.fromData(
+                            bytes,
+                            name: 'medical_center_qr.png',
+                            mimeType: 'image/png',
+                          ),
+                        ], text: 'صفحة المركز الطبي: $link');
+                      },
+                      icon: const Icon(Icons.share),
+                      label: const Text('مشاركة'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   Future<void> _makePhoneCall(String phoneNumber) async {
     final uri = Uri(scheme: 'tel', path: phoneNumber);
@@ -807,6 +1002,9 @@ class _MedicalCenterDetailsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final center = widget.center;
+    final shareLink = _centerShareLink();
+
     String bookingSummary() {
       if (!center.bookingEnabled) return 'الحجز غير متاح حالياً';
 
@@ -817,9 +1015,6 @@ class _MedicalCenterDetailsScreen extends StatelessWidget {
       if (center.bookingPatientsPerHour != null &&
           center.bookingPatientsPerHour! > 0) {
         parts.add('السعة: ${center.bookingPatientsPerHour} مريض/ساعة');
-      }
-      if (center.bookingSlotMinutes != null && center.bookingSlotMinutes! > 0) {
-        parts.add('مدة الكشف: ${center.bookingSlotMinutes} دقيقة');
       }
 
       return parts.isEmpty ? 'الحجز متاح' : parts.join(' • ');
@@ -833,6 +1028,13 @@ class _MedicalCenterDetailsScreen extends StatelessWidget {
             SliverAppBar(
               expandedHeight: 200,
               pinned: true,
+              actions: [
+                IconButton(
+                  tooltip: 'مشاركة',
+                  onPressed: _showShareSheet,
+                  icon: const Icon(Icons.share),
+                ),
+              ],
               flexibleSpace: FlexibleSpaceBar(
                 title: Text(
                   center.name,
@@ -888,6 +1090,88 @@ class _MedicalCenterDetailsScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // QR + مشاركة
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: _showShareSheet,
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: Colors.black.withValues(alpha: 0.06),
+                                ),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.06),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 6),
+                                  ),
+                                ],
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 74,
+                                    height: 74,
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(14),
+                                      border: Border.all(
+                                        color: const Color(0xFFE2E8F0),
+                                        width: 1.2,
+                                      ),
+                                    ),
+                                    child: QrImageView(
+                                      data: shareLink,
+                                      backgroundColor: Colors.white,
+                                      version: QrVersions.auto,
+                                      padding: EdgeInsets.zero,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  const Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'كود QR للمركز',
+                                          style: TextStyle(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        SizedBox(height: 6),
+                                        Text(
+                                          'افتحه أو شاركه مع الآخرين',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            color: Colors.grey,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Icon(
+                                    Icons.arrow_back_ios_new_rounded,
+                                    size: 18,
+                                    color: Colors.grey,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
                     // التقييم
                     Row(
                       children: [
@@ -937,6 +1221,77 @@ class _MedicalCenterDetailsScreen extends StatelessWidget {
                       title: 'الحجز',
                       content: bookingSummary(),
                     ),
+                    if (center.doctors.isNotEmpty) ...[
+                      const SizedBox(height: 24),
+                      const Text(
+                        'أطباء المركز',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: center.color.withValues(alpha: 0.15),
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.04),
+                              blurRadius: 16,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: center.doctors.length,
+                          separatorBuilder: (_, index) => Divider(
+                            height: 1,
+                            color: Colors.grey[200],
+                          ),
+                          itemBuilder: (context, index) {
+                            final doc = center.doctors[index];
+                            final name = (doc['name'] ?? '').trim();
+                            final title = (doc['title'] ?? '').trim();
+                            final photoUrl = (doc['photo_url'] ?? '').trim();
+                            return ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor:
+                                    center.color.withValues(alpha: 0.12),
+                                backgroundImage: photoUrl.isNotEmpty
+                                    ? NetworkImage(photoUrl)
+                                    : null,
+                                child: photoUrl.isEmpty
+                                    ? Icon(
+                                        Icons.person_rounded,
+                                        color: center.color,
+                                      )
+                                    : null,
+                              ),
+                              title: Text(
+                                name.isEmpty ? 'طبيب' : name,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              subtitle: title.isEmpty
+                                  ? null
+                                  : Text(
+                                      title,
+                                      style: TextStyle(
+                                        color: Colors.grey[700],
+                                      ),
+                                    ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                     if (center.bookingEnabled &&
                         center.bookingUrl != null &&
                         center.bookingUrl!.trim().isNotEmpty) ...[
@@ -1300,17 +1655,22 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
   final _contractsController = TextEditingController();
   final _offersController = TextEditingController();
 
+  // Doctors
+  final List<_MedicalCenterDoctorEntry> _doctors = <_MedicalCenterDoctorEntry>[];
+  int? _uploadingDoctorIndex;
+
   // Booking settings
   bool _bookingEnabled = false;
   final Set<String> _bookingMethods = <String>{};
   int _bookingPatientsPerHour = 4;
-  int _bookingSlotMinutes = 20;
   final _bookingUrlController = TextEditingController();
   final _bookingNotesController = TextEditingController();
 
   bool _submitting = false;
   bool _isUploadingCover = false;
   bool _isUploadingGallery = false;
+
+  int _activeCenterSection = 0; // 0: بيانات المركز، 1: إدارة طلبات الحجز
 
   final Set<String> _selectedSpecialties = <String>{};
   final Set<String> _selectedFeatures = <String>{};
@@ -1409,7 +1769,55 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
     _offersController.dispose();
     _bookingUrlController.dispose();
     _bookingNotesController.dispose();
+    for (final d in _doctors) {
+      d.dispose();
+    }
     super.dispose();
+  }
+
+  void _addDoctor() {
+    setState(() => _doctors.add(_MedicalCenterDoctorEntry()));
+  }
+
+  void _removeDoctor(int index) {
+    _doctors[index].dispose();
+    setState(() => _doctors.removeAt(index));
+  }
+
+  Future<void> _pickAndUploadDoctorPhoto(int index) async {
+    try {
+      final picked = await _imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 85,
+      );
+      if (picked == null) return;
+
+      if (!mounted) return;
+      setState(() => _uploadingDoctorIndex = index);
+
+      final url = await _mediaService.uploadImage(picked, 'doctors');
+      if (!mounted) return;
+      setState(() {
+        _doctors[index].photoUrlController.text = url;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم رفع صورة الطبيب بنجاح'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('خطأ في رفع صورة الطبيب: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _uploadingDoctorIndex = null);
+    }
   }
 
   bool _isHttpUrl(String value) {
@@ -1651,6 +2059,19 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
       _submitting = true;
     });
 
+    final doctorsList = <Map<String, String>>[];
+    for (final d in _doctors) {
+      final name = d.nameController.text.trim();
+      final title = d.titleController.text.trim();
+      final photoUrl = d.photoUrlController.text.trim();
+      if (name.isEmpty) continue;
+      doctorsList.add({
+        'name': name,
+        'title': title,
+        if (photoUrl.isNotEmpty) 'photo_url': photoUrl,
+      });
+    }
+
     final center = _MedicalCenter(
       name: _nameController.text.trim(),
       address: _addressController.text.trim(),
@@ -1658,10 +2079,11 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
       whatsappNumber: _whatsappController.text.trim().isEmpty
         ? null
         : _whatsappController.text.trim(),
+      doctors: doctorsList,
       bookingEnabled: _bookingEnabled,
       bookingMethods: _bookingMethods.toList(),
       bookingPatientsPerHour: _bookingEnabled ? _bookingPatientsPerHour : null,
-      bookingSlotMinutes: _bookingEnabled ? _bookingSlotMinutes : null,
+        bookingSlotMinutes: null,
       bookingUrl: (_bookingEnabled && _bookingUrlController.text.trim().isNotEmpty)
           ? _bookingUrlController.text.trim()
           : null,
@@ -1768,12 +2190,14 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          const Expanded(
+                          Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(
-                                  'بيانات المركز الطبي',
+                                  _activeCenterSection == 0
+                                      ? 'بيانات المركز الطبي'
+                                      : 'إدارة طلبات الحجز',
                                   style: TextStyle(
                                     color: Colors.white,
                                     fontSize: 18,
@@ -1782,7 +2206,9 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
                                 ),
                                 SizedBox(height: 4),
                                 Text(
-                                  'املأ البيانات الأساسية ثم أضف الصور والروابط إن وجدت',
+                                  _activeCenterSection == 0
+                                      ? 'املأ البيانات الأساسية ثم أضف الصور والروابط إن وجدت'
+                                      : 'تابع الطلبات ووافق/ارفض (سيتم تفعيلها عند ربط قاعدة البيانات)',
                                   style: TextStyle(
                                     color: Colors.white70,
                                     fontSize: 12,
@@ -1878,72 +2304,476 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
                     ),
                     const SizedBox(height: 14),
 
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(
+                          color: _brandColor.withValues(alpha: 0.10),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.04),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: SizedBox(
+                        height: 56,
+                        child: SegmentedButton<int>(
+                          style: ButtonStyle(
+                            padding: const WidgetStatePropertyAll(
+                              EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                            ),
+                            textStyle: const WidgetStatePropertyAll(
+                              TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                            ),
+                            shape: WidgetStatePropertyAll(
+                              RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            side: WidgetStateProperty.resolveWith((states) {
+                              final isSelected = states.contains(WidgetState.selected);
+                              return BorderSide(
+                                color: _brandColor.withValues(
+                                  alpha: isSelected ? 0.30 : 0.18,
+                                ),
+                              );
+                            }),
+                            backgroundColor: WidgetStateProperty.resolveWith(
+                              (states) {
+                                final isSelected =
+                                    states.contains(WidgetState.selected);
+                                return isSelected
+                                    ? _brandColor.withValues(alpha: 0.12)
+                                    : Colors.white;
+                              },
+                            ),
+                            foregroundColor: WidgetStateProperty.resolveWith(
+                              (states) {
+                                final isSelected =
+                                    states.contains(WidgetState.selected);
+                                return isSelected ? _brandColor : Colors.grey[800];
+                              },
+                            ),
+                            iconSize: const WidgetStatePropertyAll(20),
+                          ),
+                          segments: const [
+                            ButtonSegment<int>(
+                              value: 0,
+                              label: Text('بيانات المركز'),
+                              icon: Icon(Icons.assignment_outlined),
+                            ),
+                            ButtonSegment<int>(
+                              value: 1,
+                              label: Text('إدارة الحجز'),
+                              icon: Icon(Icons.manage_history),
+                            ),
+                          ],
+                          selected: <int>{_activeCenterSection},
+                          showSelectedIcon: false,
+                          onSelectionChanged: (selection) {
+                            if (selection.isEmpty) return;
+                            setState(
+                              () => _activeCenterSection = selection.first,
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    if (_activeCenterSection == 0) ...[
+                      _cardSection(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionTitleWithBadge(
+                              'معلومات أساسية',
+                              icon: Icons.assignment,
+                              subtitle: 'الحقول الأساسية مطلوبة للحفظ',
+                              badgeText: 'مطلوب',
+                            ),
+                            TextFormField(
+                              controller: _nameController,
+                              textInputAction: TextInputAction.next,
+                              decoration: _inputDecoration(
+                                label: 'اسم المركز *',
+                                icon: Icons.local_hospital,
+                              ),
+                              validator: (v) {
+                                final value = (v ?? '').trim();
+                                if (value.isEmpty) {
+                                  return 'من فضلك أدخل اسم المركز';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _addressController,
+                              textInputAction: TextInputAction.next,
+                              decoration: _inputDecoration(
+                                label: 'العنوان *',
+                                icon: Icons.location_on,
+                              ),
+                              validator: (v) {
+                                final value = (v ?? '').trim();
+                                if (value.isEmpty) return 'من فضلك أدخل العنوان';
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _phoneController,
+                              textInputAction: TextInputAction.next,
+                              keyboardType: TextInputType.phone,
+                              decoration: _inputDecoration(
+                                label: 'رقم الهاتف *',
+                                icon: Icons.phone,
+                              ),
+                              validator: (v) {
+                                final value = (v ?? '').trim();
+                                if (value.isEmpty) {
+                                  return 'من فضلك أدخل رقم الهاتف';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _workingHoursController,
+                              textInputAction: TextInputAction.next,
+                              decoration: _inputDecoration(
+                                label: 'ساعات العمل *',
+                                hint: 'مثال: يومياً 9 ص - 11 م',
+                                icon: Icons.access_time,
+                              ),
+                              validator: (v) {
+                                final value = (v ?? '').trim();
+                                if (value.isEmpty) {
+                                  return 'من فضلك أدخل ساعات العمل';
+                                }
+                                return null;
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      _cardSection(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _sectionTitleWithBadge(
+                              'إدارة طلبات الحجز',
+                              icon: Icons.manage_history,
+                              subtitle:
+                                  'تابع الطلبات ووافق/ارفض (سيتم تفعيلها عند ربط قاعدة البيانات)',
+                              badgeText: _bookingEnabled ? 'مفعّل' : 'غير مفعّل',
+                              badgeColor:
+                                  _bookingEnabled ? Colors.green : Colors.grey,
+                            ),
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: _brandColor.withValues(alpha: 0.06),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: _brandColor.withValues(alpha: 0.12),
+                                ),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 36,
+                                        height: 36,
+                                        decoration: BoxDecoration(
+                                          color: _brandColor.withValues(
+                                            alpha: 0.12,
+                                          ),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Icon(
+                                          Icons.event_note_rounded,
+                                          color: _brandColor,
+                                          size: 18,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      const Expanded(
+                                        child: Text(
+                                          'طلبات الحجز',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                          border: Border.all(
+                                            color: _brandColor.withValues(
+                                              alpha: 0.18,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          '0 جديد',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: _brandColor,
+                                            fontSize: 12,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    _bookingEnabled
+                                        ? 'لا توجد طلبات حجز حالياً.'
+                                        : 'فعّل الحجز أولاً ليتم استقبال الطلبات.',
+                                    style: TextStyle(
+                                      color: Colors.grey[700],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    child: OutlinedButton.icon(
+                                      onPressed: _submitting
+                                          ? null
+                                          : () {
+                                              ScaffoldMessenger.of(context)
+                                                  .showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'لا توجد طلبات بعد (Demo)',
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                      icon: const Icon(Icons.refresh),
+                                      label: const Padding(
+                                        padding: EdgeInsets.symmetric(
+                                          vertical: 10,
+                                        ),
+                                        child: Text('تحديث'),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    if (_activeCenterSection == 0) ...[
+
                     _cardSection(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _sectionTitleWithBadge(
-                            'معلومات أساسية',
-                            icon: Icons.assignment,
-                            subtitle: 'الحقول الأساسية مطلوبة للحفظ',
-                            badgeText: 'مطلوب',
+                            'إضافة أطباء المركز',
+                            icon: Icons.people_alt_outlined,
+                            subtitle: 'اختياري — أضف أطباء المركز وبياناتهم',
+                            badgeText:
+                                _doctors.isEmpty ? 'اختياري' : '${_doctors.length}',
+                            badgeColor: Colors.deepPurple,
                           ),
-                          TextFormField(
-                            controller: _nameController,
-                            textInputAction: TextInputAction.next,
-                            decoration: _inputDecoration(
-                              label: 'اسم المركز *',
-                              icon: Icons.local_hospital,
+                          const SizedBox(height: 10),
+                          if (_doctors.isEmpty)
+                            Text(
+                              'لم يتم إضافة أطباء بعد',
+                              style: TextStyle(
+                                color: Colors.grey[700],
+                                fontSize: 12,
+                              ),
+                            )
+                          else
+                            ..._doctors.asMap().entries.map((entry) {
+                              final i = entry.key;
+                              final doc = entry.value;
+                              final photoUrl = doc.photoUrlController.text.trim();
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 12),
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: _brandColor.withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color:
+                                        _brandColor.withValues(alpha: 0.18),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(
+                                          'طبيب ${i + 1}',
+                                          style: TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            color: _brandColor,
+                                          ),
+                                        ),
+                                        const Spacer(),
+                                        IconButton(
+                                          tooltip: 'حذف',
+                                          onPressed: _submitting
+                                              ? null
+                                              : () => _removeDoctor(i),
+                                          icon: Icon(
+                                            Icons.close_rounded,
+                                            color: Colors.red[400],
+                                            size: 18,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Row(
+                                      children: [
+                                        GestureDetector(
+                                          onTap: (_submitting ||
+                                                  _uploadingDoctorIndex == i)
+                                              ? null
+                                              : () => _pickAndUploadDoctorPhoto(i),
+                                          child: Container(
+                                            width: 78,
+                                            height: 78,
+                                            decoration: BoxDecoration(
+                                              color: Colors.white,
+                                              borderRadius:
+                                                  BorderRadius.circular(14),
+                                              border: Border.all(
+                                                color: _brandColor.withValues(
+                                                  alpha: 0.25,
+                                                ),
+                                              ),
+                                            ),
+                                            clipBehavior: Clip.antiAlias,
+                                            child: _uploadingDoctorIndex == i
+                                                ? Center(
+                                                    child:
+                                                        CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: _brandColor,
+                                                    ),
+                                                  )
+                                                : (photoUrl.isNotEmpty &&
+                                                        _isHttpUrl(photoUrl))
+                                                    ? Image.network(
+                                                        photoUrl,
+                                                        fit: BoxFit.cover,
+                                                        errorBuilder: (
+                                                          context,
+                                                          error,
+                                                          stackTrace,
+                                                        ) {
+                                                          return Center(
+                                                            child: Icon(
+                                                              Icons
+                                                                  .broken_image_outlined,
+                                                              color: Colors
+                                                                  .grey[500],
+                                                            ),
+                                                          );
+                                                        },
+                                                      )
+                                                    : Column(
+                                                        mainAxisAlignment:
+                                                            MainAxisAlignment
+                                                                .center,
+                                                        children: [
+                                                          Icon(
+                                                            Icons
+                                                                .add_a_photo_outlined,
+                                                            color: _brandColor,
+                                                          ),
+                                                          const SizedBox(
+                                                            height: 4,
+                                                          ),
+                                                          Text(
+                                                            'صورة',
+                                                            style: TextStyle(
+                                                              fontSize: 11,
+                                                              color: _brandColor,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w600,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: Column(
+                                            children: [
+                                              TextFormField(
+                                                controller: doc.nameController,
+                                                textInputAction:
+                                                    TextInputAction.next,
+                                                decoration: _inputDecoration(
+                                                  label: 'اسم الطبيب',
+                                                  hint: 'مثال: أحمد محمد',
+                                                  icon: Icons.person_rounded,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 10),
+                                              TextFormField(
+                                                controller: doc.titleController,
+                                                textInputAction:
+                                                    TextInputAction.next,
+                                                decoration: _inputDecoration(
+                                                  label: 'اللقب / التخصص',
+                                                  hint: 'مثال: أخصائي باطنة',
+                                                  icon: Icons
+                                                      .workspace_premium_rounded,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }),
+                          const SizedBox(height: 6),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton.icon(
+                              onPressed: _submitting ? null : _addDoctor,
+                              icon: const Icon(Icons.add_circle_outline_rounded),
+                              label: const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 10),
+                                child: Text('إضافة طبيب'),
+                              ),
                             ),
-                            validator: (v) {
-                              final value = (v ?? '').trim();
-                              if (value.isEmpty) return 'من فضلك أدخل اسم المركز';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _addressController,
-                            textInputAction: TextInputAction.next,
-                            decoration: _inputDecoration(
-                              label: 'العنوان *',
-                              icon: Icons.location_on,
-                            ),
-                            validator: (v) {
-                              final value = (v ?? '').trim();
-                              if (value.isEmpty) return 'من فضلك أدخل العنوان';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _phoneController,
-                            textInputAction: TextInputAction.next,
-                            keyboardType: TextInputType.phone,
-                            decoration: _inputDecoration(
-                              label: 'رقم الهاتف *',
-                              icon: Icons.phone,
-                            ),
-                            validator: (v) {
-                              final value = (v ?? '').trim();
-                              if (value.isEmpty) return 'من فضلك أدخل رقم الهاتف';
-                              return null;
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _workingHoursController,
-                            textInputAction: TextInputAction.next,
-                            decoration: _inputDecoration(
-                              label: 'ساعات العمل *',
-                              hint: 'مثال: يومياً 9 ص - 11 م',
-                              icon: Icons.access_time,
-                            ),
-                            validator: (v) {
-                              final value = (v ?? '').trim();
-                              if (value.isEmpty) return 'من فضلك أدخل ساعات العمل';
-                              return null;
-                            },
                           ),
                         ],
                       ),
@@ -1957,7 +2787,7 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
                             'إعدادات الحجز',
                             icon: Icons.event_available,
                             subtitle:
-                                'فعّل الحجز وحدد الطرق والسعة والمدة لعرضها للمستخدمين',
+                              'فعّل الحجز وحدد الطرق والسعة لعرضها للمستخدمين',
                             badgeText: _bookingEnabled ? 'مفعّل' : 'غير مفعّل',
                             badgeColor:
                                 _bookingEnabled ? Colors.green : Colors.grey,
@@ -2049,130 +2879,54 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
                                         }).toList(),
                                       ),
                                       const SizedBox(height: 14),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                                border: Border.all(
-                                                  color: _brandColor
-                                                      .withValues(alpha: 0.12),
-                                                ),
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  const Text(
-                                                    'السعة',
-                                                    style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 4),
-                                                  Text(
-                                                    '$_bookingPatientsPerHour مريض/ساعة',
-                                                    style: TextStyle(
-                                                      color: Colors.grey[700],
-                                                      fontSize: 12,
-                                                    ),
-                                                  ),
-                                                  Slider(
-                                                    value: _bookingPatientsPerHour
-                                                        .toDouble(),
-                                                    min: 1,
-                                                    max: 12,
-                                                    divisions: 11,
-                                                    label:
-                                                        '$_bookingPatientsPerHour',
-                                                    activeColor: _brandColor,
-                                                    onChanged: (v) {
-                                                      setState(() {
-                                                        _bookingPatientsPerHour =
-                                                            v.round();
-                                                      });
-                                                    },
-                                                  ),
-                                                ],
-                                              ),
+                                      Container(
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white,
+                                          borderRadius:
+                                              BorderRadius.circular(14),
+                                          border: Border.all(
+                                            color: _brandColor.withValues(
+                                              alpha: 0.12,
                                             ),
                                           ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.all(12),
-                                              decoration: BoxDecoration(
-                                                color: Colors.white,
-                                                borderRadius:
-                                                    BorderRadius.circular(14),
-                                                border: Border.all(
-                                                  color: _brandColor
-                                                      .withValues(alpha: 0.12),
-                                                ),
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.start,
-                                                children: [
-                                                  const Text(
-                                                    'مدة الكشف',
-                                                    style: TextStyle(
-                                                      fontWeight:
-                                                          FontWeight.bold,
-                                                    ),
-                                                  ),
-                                                  const SizedBox(height: 8),
-                                                  DropdownButtonFormField<int>(
-                                                    key: ValueKey<int>(
-                                                      _bookingSlotMinutes,
-                                                    ),
-                                                    initialValue:
-                                                        _bookingSlotMinutes,
-                                                    decoration:
-                                                        _inputDecoration(
-                                                      label:
-                                                          'المدة بالدقائق',
-                                                      icon: Icons.timer,
-                                                    ),
-                                                    items: const [
-                                                      10,
-                                                      15,
-                                                      20,
-                                                      30,
-                                                      45,
-                                                      60
-                                                    ]
-                                                        .map(
-                                                          (m) =>
-                                                              DropdownMenuItem<
-                                                                int
-                                                              >(
-                                                            value: m,
-                                                            child: Text(
-                                                              '$m دقيقة',
-                                                            ),
-                                                          ),
-                                                        )
-                                                        .toList(),
-                                                    onChanged: (v) {
-                                                      if (v == null) return;
-                                                      setState(() {
-                                                        _bookingSlotMinutes = v;
-                                                      });
-                                                    },
-                                                  ),
-                                                ],
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'السعة',
+                                              style: TextStyle(
+                                                fontWeight: FontWeight.bold,
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              '$_bookingPatientsPerHour مريض/ساعة',
+                                              style: TextStyle(
+                                                color: Colors.grey[700],
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            Slider(
+                                              value: _bookingPatientsPerHour
+                                                  .toDouble(),
+                                              min: 1,
+                                              max: 12,
+                                              divisions: 11,
+                                              label:
+                                                  '$_bookingPatientsPerHour',
+                                              activeColor: _brandColor,
+                                              onChanged: (v) {
+                                                setState(() {
+                                                  _bookingPatientsPerHour =
+                                                      v.round();
+                                                });
+                                              },
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                       const SizedBox(height: 12),
                                       if (_bookingMethods.contains('رابط خارجي'))
@@ -2679,6 +3433,7 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
                       ),
                     ),
                     const SizedBox(height: 10),
+                    ],
                   ],
                 ),
               ),
@@ -2687,5 +3442,17 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
         ),
       ),
     );
+  }
+}
+
+class _MedicalCenterDoctorEntry {
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController titleController = TextEditingController();
+  final TextEditingController photoUrlController = TextEditingController();
+
+  void dispose() {
+    nameController.dispose();
+    titleController.dispose();
+    photoUrlController.dispose();
   }
 }

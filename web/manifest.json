@@ -1,11 +1,11 @@
 {
-    "name": "fayoum_doctors_list",
-    "short_name": "fayoum_doctors_list",
+    "name": "دليل أطباء الفيوم",
+    "short_name": "دليل الأطباء",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "دليل أطباء الفيوم",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

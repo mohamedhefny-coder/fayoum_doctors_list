@@ -5,6 +5,109 @@ import '../models/doctor_model.dart';
 class AdminService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
+  // ====== Medical centers (Admin) ======
+  Future<List<Map<String, dynamic>>> getAllMedicalCenters() async {
+    try {
+      final response = await _supabase
+          .from('medical_centers')
+          .select(
+            'id,user_id,name,address,phone,whatsapp,facebook_page,working_hours,geo_location,cover_image_url,gallery_image_urls,available_contracts,offers_and_discounts,has_booking,is_published,publish_requested,published_at,created_at,updated_at',
+          )
+          .order('created_at', ascending: false);
+      return List<Map<String, dynamic>>.from(response);
+    } catch (e) {
+      throw Exception('فشل تحميل قائمة المراكز الطبية: ${e.toString()}');
+    }
+  }
+
+  Future<void> updateMedicalCenterSettings({
+    required String centerId,
+    bool? isPublished,
+    bool? hasBooking,
+  }) async {
+    try {
+      final data = <String, dynamic>{
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+      if (isPublished != null) data['is_published'] = isPublished;
+      if (hasBooking != null) data['has_booking'] = hasBooking;
+
+      await _supabase.from('medical_centers').update(data).eq('id', centerId);
+    } catch (e) {
+      throw Exception('فشل تحديث إعدادات المركز الطبي: ${e.toString()}');
+    }
+  }
+
+  Future<void> approveMedicalCenterPublishRequest(String centerId) async {
+    try {
+      final response = await _supabase
+          .from('medical_centers')
+          .update({
+            'is_published': true,
+            'publish_requested': false,
+            'published_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', centerId)
+          .select('id,is_published,publish_requested,published_at');
+
+      final updatedRows = List<Map<String, dynamic>>.from(response);
+      if (updatedRows.isEmpty) {
+        final exists = await _supabase
+            .from('medical_centers')
+            .select('id')
+            .eq('id', centerId)
+            .maybeSingle();
+
+        if (exists == null) {
+          throw Exception('لم يتم العثور على المركز الطبي (قد يكون محذوفاً).');
+        }
+
+        throw Exception(
+          'لم يتم تحديث حالة النشر (0 rows) رغم أن السجل موجود.\n'
+          'هذا يعني غالباً أن صلاحيات RLS تمنع المدير من UPDATE.\n'
+          'الحل: نفّذ create_medical_centers_table.sql (أو سكربت سياسات المراكز الطبية) وتأكد أن UUID المدير موجود في جدول admins.',
+        );
+      }
+    } catch (e) {
+      throw Exception('فشل قبول طلب نشر المركز: ${e.toString()}');
+    }
+  }
+
+  Future<void> rejectMedicalCenterPublishRequest(String centerId) async {
+    try {
+      await _supabase
+          .from('medical_centers')
+          .update({
+            'publish_requested': false,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', centerId);
+    } catch (e) {
+      throw Exception('فشل رفض طلب نشر المركز: ${e.toString()}');
+    }
+  }
+
+  Future<void> deleteMedicalCenter(String centerId) async {
+    try {
+      final deleted = await _supabase
+          .from('medical_centers')
+          .delete()
+          .eq('id', centerId)
+          .select('id');
+
+      final deletedList = List<Map<String, dynamic>>.from(deleted);
+      if (deletedList.isEmpty) {
+        throw Exception(
+          'تعذر حذف المركز (صلاحيات غير كافية أو سياسات RLS تمنع الحذف). '
+          'نفّذ create_medical_centers_table.sql على Supabase وتأكد أن حسابك مُسجل في جدول admins.',
+        );
+      }
+    } catch (e) {
+      throw Exception('فشل حذف المركز الطبي: ${e.toString()}');
+    }
+  }
+
   // ====== Radiology centers (Admin) ======
   Future<List<Map<String, dynamic>>> getAllRadiologyCenters() async {
     try {
