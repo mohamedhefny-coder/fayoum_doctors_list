@@ -24,6 +24,7 @@ class MedicalCentersScreen extends StatefulWidget {
 class _MedicalCentersScreenState extends State<MedicalCentersScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
+  bool _isLoadingFromDb = false;
 
   final List<String> _serviceFilters = const [
     'عيادات متعددة',
@@ -35,7 +36,7 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
 
   final Set<String> _selectedServices = <String>{};
 
-  late final List<_MedicalCenter> _allCenters = <_MedicalCenter>[];
+  final List<_MedicalCenter> _allCenters = <_MedicalCenter>[];
 
   @override
   void initState() {
@@ -45,12 +46,72 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
       duration: const Duration(milliseconds: 1200),
     )..forward();
 
+    _loadPublishedCenters();
+
     final initial = widget.initialCenterName?.trim();
     if (initial != null && initial.isNotEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _openCenterFromInitialName(initial);
       });
+    }
+  }
+
+  List<String> _stringList(dynamic value) {
+    if (value is List) return value.whereType<String>().toList();
+    return const <String>[];
+  }
+
+  List<Map<String, String>> _doctorsList(dynamic value) {
+    if (value is! List) return const <Map<String, String>>[];
+    final result = <Map<String, String>>[];
+    for (final item in value) {
+      if (item is Map) {
+        final name = (item['name'] ?? '').toString();
+        final title = (item['title'] ?? '').toString();
+        final photoUrl = (item['photo_url'] ?? '').toString();
+        if (name.trim().isEmpty) continue;
+        result.add({
+          'name': name,
+          'title': title,
+          if (photoUrl.trim().isNotEmpty) 'photo_url': photoUrl,
+        });
+      }
+    }
+    return result;
+  }
+
+  Future<void> _loadPublishedCenters() async {
+    if (!mounted) return;
+    setState(() => _isLoadingFromDb = true);
+
+    try {
+      final rows = await Supabase.instance.client
+          .from('medical_centers')
+          .select(
+            'name,address,phone,whatsapp,working_hours,geo_location,facebook_page,cover_image_url,gallery_image_urls,available_contracts,offers_and_discounts,has_booking,booking_methods,booking_url,booking_notes,booking_patients_per_hour,specialties,services,features,doctors,created_at',
+          )
+          .eq('is_published', true)
+          .order('created_at', ascending: false);
+
+      final centers = <_MedicalCenter>[];
+      for (final r in rows) {
+        centers.add(_mapDbRowToMedicalCenter(Map<String, dynamic>.from(r)));
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _allCenters
+          ..clear()
+          ..addAll(centers);
+        _isLoadingFromDb = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingFromDb = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('تعذر تحميل المراكز الطبية من الخادم.')),
+      );
     }
   }
 
@@ -95,22 +156,25 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
   }
 
   _MedicalCenter _mapDbRowToMedicalCenter(Map<String, dynamic> row) {
-    final galleryRaw = row['gallery_image_urls'];
-    final gallery = (galleryRaw is List)
-        ? galleryRaw.whereType<String>().toList()
-        : const <String>[];
+    final gallery = _stringList(row['gallery_image_urls']);
+    final specialties = _stringList(row['specialties']);
+    final services = _stringList(row['services']);
+    final features = _stringList(row['features']);
+    final bookingMethods = _stringList(row['booking_methods']);
+    final doctors = _doctorsList(row['doctors']);
 
     return _MedicalCenter(
       name: (row['name'] as String?)?.trim() ?? 'مركز طبي',
       address: (row['address'] as String?)?.trim() ?? '',
       phone: (row['phone'] as String?)?.trim() ?? '',
       whatsappNumber: (row['whatsapp'] as String?)?.trim(),
+      doctors: doctors,
       rating: 0,
       ratingCount: 0,
       workingHours: (row['working_hours'] as String?)?.trim() ?? 'غير محدد',
-      specialties: const <String>[],
-      services: const <String>[],
-      features: const <String>[],
+      specialties: specialties,
+      services: services,
+      features: features,
       geoLocation: (row['geo_location'] as String?)?.trim(),
       facebookPage: (row['facebook_page'] as String?)?.trim(),
       coverImageUrl: (row['cover_image_url'] as String?)?.trim(),
@@ -118,6 +182,12 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
       availableContracts: (row['available_contracts'] as String?)?.trim(),
       offersAndDiscounts: (row['offers_and_discounts'] as String?)?.trim(),
       bookingEnabled: row['has_booking'] == true,
+      bookingMethods: bookingMethods,
+      bookingPatientsPerHour: row['booking_patients_per_hour'] is int
+          ? row['booking_patients_per_hour'] as int
+          : null,
+      bookingUrl: (row['booking_url'] as String?)?.trim(),
+      bookingNotes: (row['booking_notes'] as String?)?.trim(),
       icon: Icons.medical_services,
       color: const Color(0xFF00BCD4),
     );
@@ -127,19 +197,14 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
     final rows = await Supabase.instance.client
         .from('medical_centers')
         .select(
-          'name,address,phone,whatsapp,working_hours,geo_location,facebook_page,cover_image_url,gallery_image_urls,available_contracts,offers_and_discounts,has_booking',
+          'name,address,phone,whatsapp,working_hours,geo_location,facebook_page,cover_image_url,gallery_image_urls,available_contracts,offers_and_discounts,has_booking,booking_methods,booking_url,booking_notes,booking_patients_per_hour,specialties,services,features,doctors',
         )
         .eq('is_published', true)
         .eq('name', name)
         .limit(1);
 
-    if (rows is List && rows.isNotEmpty) {
-      final first = rows.first;
-      if (first is Map<String, dynamic>) {
-        return _mapDbRowToMedicalCenter(first);
-      }
-    }
-    return null;
+    if (rows.isEmpty) return null;
+    return _mapDbRowToMedicalCenter(Map<String, dynamic>.from(rows.first));
   }
 
   @override
@@ -179,6 +244,15 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
     setState(() {
       _allCenters.add(newCenter);
     });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تم حفظ بيانات المركز وإرسال طلب النشر للمدير.'),
+        backgroundColor: Colors.blueGrey,
+      ),
+    );
+
+    _openDetails(newCenter);
   }
 
   Future<void> _openOwnerLoginThenAddCenter() async {
@@ -364,6 +438,15 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
                   ),
                 ),
               ),
+
+              if (_isLoadingFromDb)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.only(top: 16),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                ),
+
               // قائمة المراكز
               SliverPadding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -2057,9 +2140,7 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
       return;
     }
 
-    setState(() {
-      _submitting = true;
-    });
+    setState(() => _submitting = true);
 
     final doctorsList = <Map<String, String>>[];
     for (final d in _doctors) {
@@ -2119,8 +2200,69 @@ class _AddMedicalCenterScreenState extends State<_AddMedicalCenterScreen> {
       color: const Color(0xFF00BCD4),
     );
 
-    if (!mounted) return;
-    Navigator.pop(context, center);
+    try {
+      final client = Supabase.instance.client;
+      final user = client.auth.currentUser;
+      if (user == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('يرجى تسجيل الدخول أولاً لحفظ بيانات المركز.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      final payload = <String, dynamic>{
+        'user_id': user.id,
+        'name': center.name,
+        'address': center.address,
+        'phone': center.phone,
+        'whatsapp': center.whatsappNumber,
+        'working_hours': center.workingHours,
+        'geo_location': center.geoLocation,
+        'facebook_page': center.facebookPage,
+        'cover_image_url': center.coverImageUrl,
+        'gallery_image_urls': center.galleryImageUrls,
+        'available_contracts': center.availableContracts,
+        'offers_and_discounts': center.offersAndDiscounts,
+        'has_booking': center.bookingEnabled,
+        'booking_methods': center.bookingMethods,
+        'booking_url': center.bookingUrl,
+        'booking_notes': center.bookingNotes,
+        'booking_patients_per_hour': center.bookingPatientsPerHour,
+        'specialties': center.specialties,
+        'services': center.services,
+        'features': center.features,
+        'doctors': center.doctors,
+        'publish_requested': true,
+        'is_published': false,
+      };
+
+      await client.from('medical_centers').insert(payload);
+
+      if (!mounted) return;
+      Navigator.pop(context, center);
+    } on PostgrestException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('تعذر حفظ البيانات على الخادم: ${e.message}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('حدث خطأ غير متوقع أثناء حفظ بيانات المركز.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   @override

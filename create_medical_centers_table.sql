@@ -29,6 +29,16 @@ create table if not exists public.medical_centers (
 
   has_booking boolean not null default false,
 
+  booking_methods text[] default '{}'::text[],
+  booking_url text,
+  booking_notes text,
+  booking_patients_per_hour integer,
+
+  specialties text[] default '{}'::text[],
+  services text[] default '{}'::text[],
+  features text[] default '{}'::text[],
+  doctors jsonb default '[]'::jsonb,
+
   is_published boolean not null default false,
   publish_requested boolean not null default false,
   published_at timestamp with time zone,
