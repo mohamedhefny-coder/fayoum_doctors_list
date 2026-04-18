@@ -86,10 +86,12 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
       return;
     }
 
+    final fetchedCenter = fetched;
+
     setState(() {
-      _allCenters.insert(0, fetched);
+      _allCenters.insert(0, fetchedCenter);
     });
-    _openDetails(fetched);
+    _openDetails(fetchedCenter);
   }
 
   _MedicalCenter _mapDbRowToMedicalCenter(Map<String, dynamic> row) {
