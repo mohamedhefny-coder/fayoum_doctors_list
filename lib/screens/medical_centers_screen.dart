@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../constants/doctor_specialties.dart';
@@ -117,6 +118,16 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
     });
   }
 
+  Future<void> _openOwnerLoginThenAddCenter() async {
+    final ok = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const _MedicalCenterOwnerLoginScreen()),
+    );
+    if (!mounted) return;
+    if (ok != true) return;
+    await _openAddCenter();
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -146,9 +157,17 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
                 backgroundColor: const Color(0xFF00BCD4),
                 actions: [
                   IconButton(
-                    tooltip: 'إضافة مركز',
-                    icon: const Icon(Icons.add),
-                    onPressed: _openAddCenter,
+                    tooltip: 'تسجيل دخول مركز طبي',
+                    icon: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.asset(
+                        'assets/images/med.center.PNG',
+                        width: 26,
+                        height: 26,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    onPressed: _openOwnerLoginThenAddCenter,
                   ),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
@@ -341,6 +360,213 @@ class _MedicalCentersScreenState extends State<MedicalCentersScreen>
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 20)),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MedicalCenterOwnerLoginScreen extends StatefulWidget {
+  const _MedicalCenterOwnerLoginScreen();
+
+  @override
+  State<_MedicalCenterOwnerLoginScreen> createState() =>
+      _MedicalCenterOwnerLoginScreenState();
+}
+
+class _MedicalCenterOwnerLoginScreenState
+    extends State<_MedicalCenterOwnerLoginScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _obscure = true;
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _showSnack(String msg, {Color? color}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg),
+        backgroundColor: color,
+      ),
+    );
+  }
+
+  Future<void> _login() async {
+    if (_loading) return;
+    final ok = _formKey.currentState?.validate() ?? false;
+    if (!ok) return;
+
+    setState(() => _loading = true);
+    try {
+      final auth = Supabase.instance.client.auth;
+      final res = await auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      final user = res.user;
+      if (user == null) {
+        _showSnack('تعذر تسجيل الدخول. حاول مرة أخرى.');
+        return;
+      }
+
+      final meta = user.userMetadata ?? const <String, dynamic>{};
+      final userType = meta['user_type']?.toString();
+      if (userType != 'medical_center') {
+        await auth.signOut();
+        _showSnack(
+          'هذا الحساب ليس حساب مركز طبي.',
+          color: Colors.orange,
+        );
+        return;
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } on AuthException catch (e) {
+      _showSnack(e.message, color: Colors.red);
+    } catch (_) {
+      _showSnack('حدث خطأ غير متوقع أثناء تسجيل الدخول.', color: Colors.red);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('تسجيل دخول المركز الطبي'),
+          backgroundColor: const Color(0xFF00BCD4),
+          foregroundColor: Colors.white,
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.asset(
+                                'assets/images/med.center.PNG',
+                                width: 44,
+                                height: 44,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                'استخدم بيانات الدخول التي أنشأها المدير',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'البريد الإلكتروني',
+                            prefixIcon: Icon(Icons.email_outlined),
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (v) {
+                            final value = (v ?? '').trim();
+                            if (value.isEmpty) return 'أدخل البريد الإلكتروني';
+                            if (!value.contains('@')) {
+                              return 'أدخل بريد إلكتروني صحيح';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscure,
+                          textInputAction: TextInputAction.done,
+                          onFieldSubmitted: (_) => _login(),
+                          decoration: InputDecoration(
+                            labelText: 'كلمة المرور',
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              onPressed: () {
+                                setState(() => _obscure = !_obscure);
+                              },
+                              icon: Icon(
+                                _obscure
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                              ),
+                            ),
+                          ),
+                          validator: (v) {
+                            if ((v ?? '').isEmpty) {
+                              return 'أدخل كلمة المرور';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          height: 46,
+                          child: ElevatedButton(
+                            onPressed: _loading ? null : _login,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF00BCD4),
+                              foregroundColor: Colors.white,
+                            ),
+                            child: _loading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    'تسجيل الدخول',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
