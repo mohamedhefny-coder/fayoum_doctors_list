@@ -6,6 +6,7 @@ import 'package:flutter/material.dart' show TimeOfDay;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/clinic_working_hours.dart';
 import '../models/doctor_model.dart';
+import '../models/doctor_review.dart';
 import '../models/doctor_working_hours.dart';
 
 class DoctorDatabaseService {
@@ -1652,6 +1653,174 @@ class DoctorDatabaseService {
       await _client.auth.signOut();
     } catch (e) {
       throw Exception('خطأ في تسجيل الخروج: $e');
+    }
+  }
+
+  // ============================================================
+  // نظام التقييمات والمراجعات
+  // ============================================================
+
+  /// إرسال تقييم جديد من مستخدم (يبقى معلقاً حتى موافقة الطبيب)
+  Future<void> submitDoctorReview({
+    required String doctorId,
+    required String reviewerName,
+    String? reviewerPhone,
+    required double rating,
+    String? reviewText,
+  }) async {
+    try {
+      await _client.from('doctor_reviews').insert({
+        'doctor_id': doctorId,
+        'reviewer_name': reviewerName.trim(),
+        'reviewer_phone': reviewerPhone?.trim(),
+        'rating': rating,
+        'review_text': reviewText?.trim().isEmpty == true
+            ? null
+            : reviewText?.trim(),
+        'status': 'pending',
+      });
+    } catch (e) {
+      throw Exception('خطأ في إرسال التقييم: $e');
+    }
+  }
+
+  /// جلب التقييمات المعتمدة لطبيب معين (للعرض العام)
+  Future<List<DoctorReview>> getApprovedReviews({
+    required String doctorId,
+  }) async {
+    try {
+      final rows =
+          await _client
+                  .from('doctor_reviews')
+                  .select()
+                  .eq('doctor_id', doctorId)
+                  .eq('status', 'approved')
+                  .order('approved_at', ascending: false)
+              as List<dynamic>;
+
+      return rows
+          .whereType<Map<String, dynamic>>()
+          .map(DoctorReview.fromJson)
+          .toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// جلب التقييمات المعلقة لطبيب (لإدارتها من قبل الطبيب)
+  Future<List<DoctorReview>> getPendingReviews({
+    required String doctorId,
+  }) async {
+    try {
+      final rows =
+          await _client
+                  .from('doctor_reviews')
+                  .select()
+                  .eq('doctor_id', doctorId)
+                  .eq('status', 'pending')
+                  .order('created_at', ascending: false)
+              as List<dynamic>;
+
+      return rows
+          .whereType<Map<String, dynamic>>()
+          .map(DoctorReview.fromJson)
+          .toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// جلب كل تقييمات الطبيب (للطبيب في لوحته)
+  Future<List<DoctorReview>> getAllDoctorReviews({
+    required String doctorId,
+  }) async {
+    try {
+      final rows =
+          await _client
+                  .from('doctor_reviews')
+                  .select()
+                  .eq('doctor_id', doctorId)
+                  .order('created_at', ascending: false)
+              as List<dynamic>;
+
+      return rows
+          .whereType<Map<String, dynamic>>()
+          .map(DoctorReview.fromJson)
+          .toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /// موافقة الطبيب على تقييم — يحدث تلقائياً متوسط التقييم
+  Future<void> approveReview({required String reviewId}) async {
+    try {
+      // أولاً: جلب بيانات التقييم
+      final reviewData = await _client
+          .from('doctor_reviews')
+          .select()
+          .eq('id', reviewId)
+          .single();
+
+      final doctorId = reviewData['doctor_id']?.toString() ?? '';
+
+      // تحديث حالة التقييم إلى معتمد
+      await _client
+          .from('doctor_reviews')
+          .update({
+            'status': 'approved',
+            'approved_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', reviewId);
+
+      // إعادة حساب المتوسط من التقييمات المعتمدة
+      final approvedRows =
+          await _client
+                  .from('doctor_reviews')
+                  .select('rating')
+                  .eq('doctor_id', doctorId)
+                  .eq('status', 'approved')
+              as List<dynamic>;
+
+      if (approvedRows.isNotEmpty) {
+        final ratings = approvedRows
+            .whereType<Map<String, dynamic>>()
+            .map((r) => (r['rating'] as num?)?.toDouble() ?? 0.0)
+            .toList();
+        final avgRating = ratings.reduce((a, b) => a + b) / ratings.length;
+
+        await _client
+            .from('doctors')
+            .update({
+              'rating': double.parse(avgRating.toStringAsFixed(2)),
+              'rating_count': ratings.length,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', doctorId);
+      }
+    } catch (e) {
+      throw Exception('خطأ في الموافقة على التقييم: $e');
+    }
+  }
+
+  /// رفض تقييم من قِبل الطبيب
+  Future<void> rejectReview({required String reviewId, String? reason}) async {
+    try {
+      await _client
+          .from('doctor_reviews')
+          .update({'status': 'rejected', 'rejection_reason': reason?.trim()})
+          .eq('id', reviewId);
+    } catch (e) {
+      throw Exception('خطأ في رفض التقييم: $e');
+    }
+  }
+
+  /// حذف تقييم نهائياً (للطبيب أو الأدمن)
+  Future<void> deleteReview({required String reviewId}) async {
+    try {
+      await _client.from('doctor_reviews').delete().eq('id', reviewId);
+    } catch (e) {
+      throw Exception('خطأ في حذف التقييم: $e');
     }
   }
 }

@@ -14,6 +14,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../models/doctor_model.dart';
 import '../models/doctor_working_hours.dart';
 import '../services/doctor_database_service.dart';
+import '../widgets/doctor_reviews_widget.dart';
 import '../widgets/doctor_summary_card.dart';
 import '../constants/fayoum_locations.dart';
 import 'doctor_appointments_screen.dart';
@@ -2284,6 +2285,11 @@ class _DoctorProfileScreenState extends State<DoctorProfileScreen> {
         _DoctorQuestionsManagementPanel(
           dbService: _dbService,
           doctorId: doctor.id,
+        ),
+        const SizedBox(height: 24),
+        DoctorReviewsManagementSection(
+          doctorId: doctor.id,
+          accentColor: const Color(0xFF246BCE),
         ),
         const SizedBox(height: 24),
         const Text(

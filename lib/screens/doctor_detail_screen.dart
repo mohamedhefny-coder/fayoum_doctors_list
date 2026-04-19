@@ -9,6 +9,7 @@ import '../deep_link_config.dart';
 import '../models/doctor_model.dart';
 import '../models/doctor_working_hours.dart';
 import '../services/doctor_database_service.dart';
+import '../widgets/doctor_reviews_widget.dart';
 import 'doctor_questions_screen.dart';
 import 'intro_video_player_screen.dart';
 
@@ -512,6 +513,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: const Color(0xFFF1F5F9),
+        bottomNavigationBar: _buildFixedBookingBar(db),
         body: CustomScrollView(
           slivers: [
             SliverAppBar(
@@ -1585,99 +1587,6 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-
-                      // زر الحجز
-                      InkWell(
-                        onTap: widget.doctor.isBookingEnabled
-                            ? () => _showBookingDialog(context, db)
-                            : null,
-                        borderRadius: BorderRadius.circular(18),
-                        child: Ink(
-                          width: double.infinity,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 14,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(18),
-                            gradient: widget.doctor.isBookingEnabled
-                                ? LinearGradient(
-                                    begin: Alignment.topRight,
-                                    end: Alignment.bottomLeft,
-                                    colors: [
-                                      widget.cardColor,
-                                      _darken(widget.cardColor, 0.18),
-                                    ],
-                                  )
-                                : null,
-                            color: widget.doctor.isBookingEnabled
-                                ? null
-                                : Colors.grey.shade400,
-                            boxShadow: [
-                              BoxShadow(
-                                color: widget.doctor.isBookingEnabled
-                                    ? widget.cardColor.withValues(alpha: 0.25)
-                                    : Colors.black.withValues(alpha: 0.06),
-                                blurRadius: 18,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(10),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withValues(alpha: 0.18),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
-                                    color: Colors.white.withValues(alpha: 0.22),
-                                  ),
-                                ),
-                                child: const Icon(
-                                  Icons.event_available,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      widget.doctor.isBookingEnabled
-                                          ? 'حجز موعد الآن'
-                                          : 'الحجز غير متاح حالياً',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.bold,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      widget.doctor.isBookingEnabled
-                                          ? 'خطوات سريعة داخل التطبيق'
-                                          : 'جرّب التواصل هاتفياً أو واتساب',
-                                      style: TextStyle(
-                                        color: Colors.white.withValues(
-                                          alpha: 0.90,
-                                        ),
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              Icon(
-                                Icons.arrow_forward_ios,
-                                size: 16,
-                                color: Colors.white.withValues(alpha: 0.95),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
                     ],
 
                     // قسم الوسائط المتعددة
@@ -1903,12 +1812,132 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 24),
+
+                    // ── قسم التقييمات والمراجعات ──
+                    DoctorReviewsSection(
+                      doctorId: widget.doctor.id,
+                      accentColor: widget.cardColor,
+                      currentRating: widget.doctor.rating,
+                    ),
+
                     const SizedBox(height: 32),
                   ],
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFixedBookingBar(DoctorDatabaseService db) {
+    final isEnabled = widget.doctor.isBookingEnabled;
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.10),
+              blurRadius: 20,
+              offset: const Offset(0, -6),
+            ),
+          ],
+          border: const Border(
+            top: BorderSide(color: Color(0xFFE2E8F0)),
+          ),
+        ),
+        child: InkWell(
+          onTap: isEnabled ? () => _showBookingDialog(context, db) : null,
+          borderRadius: BorderRadius.circular(16),
+          child: Ink(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: isEnabled
+                  ? LinearGradient(
+                      begin: Alignment.topRight,
+                      end: Alignment.bottomLeft,
+                      colors: [
+                        widget.cardColor,
+                        _darken(widget.cardColor, 0.18),
+                      ],
+                    )
+                  : null,
+              color: isEnabled ? null : Colors.grey.shade400,
+              boxShadow: [
+                BoxShadow(
+                  color: isEnabled
+                      ? widget.cardColor.withValues(alpha: 0.30)
+                      : Colors.black.withValues(alpha: 0.06),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.20),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Icon(
+                    isEnabled ? Icons.event_available : Icons.event_busy,
+                    color: Colors.white,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        isEnabled ? 'احجز موعدك الآن' : 'الحجز غير متاح حالياً',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                      Text(
+                        isEnabled
+                            ? 'خطوات سريعة داخل التطبيق'
+                            : 'جرّب التواصل هاتفياً أو واتساب',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.88),
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isEnabled)
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.20),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: Colors.white.withValues(alpha: 0.95),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         ),
       ),
     );

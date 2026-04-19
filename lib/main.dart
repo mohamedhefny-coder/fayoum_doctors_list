@@ -1530,7 +1530,7 @@ class _QuickCategoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const double iconSize = 75.0;
-    final imageFit = category.label == 'GYM' ? BoxFit.cover : BoxFit.contain;
+    final imageFit = BoxFit.cover;
 
     void openCategory() {
       if (category.label == 'مستشفيات حكومية') {
