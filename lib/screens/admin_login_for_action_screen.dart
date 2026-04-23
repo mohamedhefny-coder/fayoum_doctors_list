@@ -63,9 +63,17 @@ class _AdminLoginForActionScreenState extends State<AdminLoginForActionScreen> {
       Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
+      var message = e.toString();
+      if (message.startsWith('Exception: ')) {
+        message = message.substring('Exception: '.length);
+      }
+      if (message.contains('Invalid login credentials') ||
+          message.toLowerCase().contains('invalid_credentials')) {
+        message = 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('خطأ في تسجيل الدخول: $e'),
+          content: Text('خطأ في تسجيل الدخول: $message'),
           backgroundColor: Colors.red,
         ),
       );

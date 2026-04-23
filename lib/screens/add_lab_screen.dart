@@ -1,5 +1,9 @@
-import 'package:flutter/material.dart';
+import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+
+import '../services/lab_media_service.dart';
 import '../services/lab_service.dart';
 
 class AddLabScreen extends StatefulWidget {
@@ -20,19 +24,75 @@ class _AddLabScreenState extends State<AddLabScreen> {
   final _offersController = TextEditingController();
   final _contractsController = TextEditingController();
   final _labService = LabService();
+  final _labMediaService = LabMediaService();
+  final _imagePicker = ImagePicker();
   bool _isLoading = false;
 
+  XFile? _coverImageFile;
+  Uint8List? _coverImageBytes;
+
+  XFile? _logoImageFile;
+  Uint8List? _logoImageBytes;
+
+  final List<XFile> _galleryImageFiles = <XFile>[];
+  final List<Uint8List> _galleryImageBytes = <Uint8List>[];
+
   final List<String> _features = [];
-  final Map<String, List<String>> _tests = {
-    'تحاليل روتينية': [],
-    'تحاليل متخصصة': [],
+  static const List<String> _availableFeatures = [
+    'نتائج في نفس اليوم',
+    'خدمة سحب عينات من المنزل',
+    'سحب عينات للأطفال',
+    'إمكانية الدفع أونلاين',
+    'خصومات للمتابعة',
+    'نتائج عبر واتساب',
+    'نتائج عبر البريد الإلكتروني',
+    'تعاقدات مع شركات/تأمين',
+    'خدمة عملاء على مدار اليوم',
+    'استقبال حالات طوارئ',
+  ];
+
+  static const Map<String, List<String>> _availableTests = {
+    'تحاليل روتينية': [
+      'صورة دم كاملة (CBC)',
+      'تحليل سكر صائم',
+      'تحليل سكر فاطر',
+      'سكر تراكمي (HbA1c)',
+      'تحليل بول كامل',
+      'تحليل براز كامل',
+      'وظائف كبد (ALT/AST)',
+      'وظائف كلى (Urea/Creatinine)',
+      'دهون الدم (Chol/Trig)',
+      'فصيلة الدم (ABO/Rh)',
+      'HBsAg',
+      'HCV Ab',
+    ],
+    'تحاليل متخصصة': [
+      'CRP',
+      'ESR',
+      'D-Dimer',
+      'Ferritin',
+      'Vitamin D',
+      'Vitamin B12',
+      'TSH',
+      'Free T3',
+      'Free T4',
+      'Prolactin',
+      'FSH',
+      'LH',
+      'Testosterone',
+      'Beta-hCG',
+      'PSA',
+    ],
+  };
+
+  late final Map<String, Set<String>> _selectedTestsByCategory = {
+    for (final key in _availableTests.keys) key: <String>{},
   };
 
   final _featureController = TextEditingController();
-  final _testControllers = <String, TextEditingController>{
-    'تحاليل روتينية': TextEditingController(),
-    'تحاليل متخصصة': TextEditingController(),
-  };
+
+  final _customTestController = TextEditingController();
+  final List<String> _customTests = <String>[];
 
   @override
   void dispose() {
@@ -45,9 +105,7 @@ class _AddLabScreenState extends State<AddLabScreen> {
     _offersController.dispose();
     _contractsController.dispose();
     _featureController.dispose();
-    for (final controller in _testControllers.values) {
-      controller.dispose();
-    }
+    _customTestController.dispose();
     super.dispose();
   }
 
@@ -61,25 +119,125 @@ class _AddLabScreenState extends State<AddLabScreen> {
     }
   }
 
-  void _addTest(String category) {
-    final controller = _testControllers[category];
-    if (controller == null) return;
-
-    final text = controller.text.trim();
-    if (text.isNotEmpty && !_tests[category]!.contains(text)) {
-      setState(() {
-        _tests[category]!.add(text);
-        controller.clear();
-      });
-    }
-  }
-
   void _removeFeature(String item) {
     setState(() => _features.remove(item));
   }
 
-  void _removeTest(String category, String item) {
-    setState(() => _tests[category]!.remove(item));
+  void _toggleCommonFeature(String item, bool selected) {
+    setState(() {
+      if (selected) {
+        if (!_features.contains(item)) {
+          _features.add(item);
+        }
+      } else {
+        _features.remove(item);
+      }
+    });
+  }
+
+  void _addCustomTest() {
+    final text = _customTestController.text.trim();
+    if (text.isEmpty) return;
+
+    final existsInCustom = _customTests.any(
+      (t) => t.trim().toLowerCase() == text.toLowerCase(),
+    );
+    if (existsInCustom) {
+      _customTestController.clear();
+      return;
+    }
+
+    setState(() {
+      _customTests.add(text);
+      _customTestController.clear();
+    });
+  }
+
+  void _removeCustomTest(String item) {
+    setState(() => _customTests.remove(item));
+  }
+
+  Future<void> _pickCoverImage() async {
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
+      maxWidth: 1920,
+    );
+    if (picked == null) return;
+
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _coverImageFile = picked;
+      _coverImageBytes = bytes;
+    });
+  }
+
+  Future<void> _pickLogoImage() async {
+    final picked = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+      maxWidth: 1024,
+    );
+    if (picked == null) return;
+
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _logoImageFile = picked;
+      _logoImageBytes = bytes;
+    });
+  }
+
+  Future<void> _pickGalleryImages() async {
+    final picked = await _imagePicker.pickMultiImage(
+      imageQuality: 85,
+      maxWidth: 1920,
+    );
+    if (picked.isEmpty) return;
+
+    final bytes = <Uint8List>[];
+    for (final f in picked) {
+      bytes.add(await f.readAsBytes());
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _galleryImageFiles.addAll(picked);
+      _galleryImageBytes.addAll(bytes);
+    });
+  }
+
+  void _removeGalleryImageAt(int index) {
+    setState(() {
+      _galleryImageFiles.removeAt(index);
+      _galleryImageBytes.removeAt(index);
+    });
+  }
+
+  void _toggleTestSelection(String category, String test) {
+    final set = _selectedTestsByCategory[category];
+    if (set == null) return;
+    setState(() {
+      if (set.contains(test)) {
+        set.remove(test);
+      } else {
+        set.add(test);
+      }
+    });
+  }
+
+  void _selectAllTestsInCategory(String category) {
+    final available = _availableTests[category] ?? const <String>[];
+    setState(() {
+      _selectedTestsByCategory[category] = available.toSet();
+    });
+  }
+
+  void _clearAllTestsInCategory(String category) {
+    setState(() {
+      _selectedTestsByCategory[category] = <String>{};
+    });
   }
 
   Future<void> _saveLabData() async {
@@ -91,7 +249,37 @@ class _AddLabScreenState extends State<AddLabScreen> {
       debugPrint('💾 Saving lab data...');
       debugPrint('💾 Name: ${_nameController.text.trim()}');
       debugPrint('💾 Features: $_features');
-      debugPrint('💾 Tests: $_tests');
+
+      final testsToSave = <String, List<String>>{};
+      for (final entry in _selectedTestsByCategory.entries) {
+        final list = entry.value.toList()..sort();
+        if (list.isNotEmpty) {
+          testsToSave[entry.key] = list;
+        }
+      }
+      if (_customTests.isNotEmpty) {
+        final list = _customTests.toList()..sort();
+        testsToSave['أخرى'] = list;
+      }
+      debugPrint('💾 Tests: $testsToSave');
+
+      String? coverUrl;
+      String? logoUrl;
+      List<String>? galleryUrls;
+
+      if (_coverImageFile != null) {
+        coverUrl = await _labMediaService.uploadImage(_coverImageFile!, 'cover');
+      }
+      if (_logoImageFile != null) {
+        logoUrl = await _labMediaService.uploadImage(_logoImageFile!, 'logo');
+      }
+      if (_galleryImageFiles.isNotEmpty) {
+        final urls = <String>[];
+        for (final f in _galleryImageFiles) {
+          urls.add(await _labMediaService.uploadImage(f, 'gallery'));
+        }
+        galleryUrls = urls;
+      }
 
       // حفظ بيانات المعمل في Supabase
       await _labService.upsertLabData(
@@ -117,8 +305,11 @@ class _AddLabScreenState extends State<AddLabScreen> {
         contracts: _contractsController.text.trim().isNotEmpty
             ? _contractsController.text.trim()
             : null,
+        coverImageUrl: coverUrl,
+        logoImageUrl: logoUrl,
+        galleryImageUrls: galleryUrls,
         features: _features.isNotEmpty ? _features : null,
-        tests: _tests,
+        tests: testsToSave.isNotEmpty ? testsToSave : null,
       );
 
       debugPrint('💾 Lab data saved successfully!');
@@ -191,6 +382,9 @@ class _AddLabScreenState extends State<AddLabScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              _buildPageHeader(colorScheme),
+              const SizedBox(height: 16),
+              _buildImagesSection(colorScheme),
               _buildBasicInfoSection(colorScheme),
               const SizedBox(height: 20),
               _buildFeaturesSection(colorScheme),
@@ -200,6 +394,309 @@ class _AddLabScreenState extends State<AddLabScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPageHeader(ColorScheme colorScheme) {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: LinearGradient(
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [
+            colorScheme.primary.withValues(alpha: 0.14),
+            colorScheme.secondary.withValues(alpha: 0.10),
+          ],
+        ),
+        border: Border.all(color: colorScheme.primary.withValues(alpha: 0.18)),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: colorScheme.outlineVariant),
+            ),
+            child: Icon(Icons.biotech, color: colorScheme.primary, size: 30),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ملف المعمل',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                ),
+                SizedBox(height: 6),
+                Text(
+                  'أضف صور المعمل واختر التحاليل من القائمة متعددة الاختيار.',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImagesSection(ColorScheme colorScheme) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colorScheme.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(Icons.photo_library_outlined, color: colorScheme.primary),
+                const SizedBox(width: 8),
+                const Text(
+                  'صور المعمل',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+
+          // Cover
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'كفر المعمل',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 10),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: AspectRatio(
+                    aspectRatio: 16 / 7,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (_coverImageBytes != null)
+                          Image.memory(_coverImageBytes!, fit: BoxFit.cover)
+                        else
+                          Container(
+                            color: colorScheme.surfaceContainerHighest,
+                            child: Icon(
+                              Icons.image_outlined,
+                              color: colorScheme.outline,
+                              size: 42,
+                            ),
+                          ),
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.0),
+                                Colors.black.withValues(alpha: 0.35),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: 10,
+                          right: 10,
+                          bottom: 10,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: FilledButton.icon(
+                                  onPressed: _isLoading ? null : _pickCoverImage,
+                                  icon: const Icon(Icons.upload),
+                                  label: Text(
+                                    _coverImageFile == null
+                                        ? 'اختيار صورة الكفر'
+                                        : 'تغيير صورة الكفر',
+                                  ),
+                                ),
+                              ),
+                              if (_coverImageFile != null) ...[
+                                const SizedBox(width: 10),
+                                IconButton.filledTonal(
+                                  onPressed: _isLoading
+                                      ? null
+                                      : () {
+                                          setState(() {
+                                            _coverImageFile = null;
+                                            _coverImageBytes = null;
+                                          });
+                                        },
+                                  icon: const Icon(Icons.close),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          // Logo
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'لوجو المعمل',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: colorScheme.surfaceContainerHighest,
+                        border: Border.all(color: colorScheme.outlineVariant),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: _logoImageBytes != null
+                          ? Image.memory(_logoImageBytes!, fit: BoxFit.cover)
+                          : Icon(
+                              Icons.apartment,
+                              color: colorScheme.outline,
+                              size: 28,
+                            ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _isLoading ? null : _pickLogoImage,
+                        icon: const Icon(Icons.upload_outlined),
+                        label: Text(
+                          _logoImageFile == null
+                              ? 'اختيار لوجو'
+                              : 'تغيير اللوجو',
+                        ),
+                      ),
+                    ),
+                    if (_logoImageFile != null) ...[
+                      const SizedBox(width: 10),
+                      IconButton.filledTonal(
+                        onPressed: _isLoading
+                            ? null
+                            : () {
+                                setState(() {
+                                  _logoImageFile = null;
+                                  _logoImageBytes = null;
+                                });
+                              },
+                        icon: const Icon(Icons.close),
+                      ),
+                    ],
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          const Divider(height: 1),
+
+          // Gallery
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'معرض الصور',
+                        style:
+                            TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _isLoading ? null : _pickGalleryImages,
+                      icon: const Icon(Icons.add_photo_alternate_outlined),
+                      label: const Text('إضافة صور'),
+                    ),
+                  ],
+                ),
+                if (_galleryImageFiles.isEmpty) ...[
+                  const SizedBox(height: 10),
+                  Text(
+                    'يمكنك إضافة أكثر من صورة لعرض المعمل.',
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
+                  ),
+                ] else ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: List.generate(_galleryImageFiles.length, (i) {
+                      return Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Image.memory(
+                              _galleryImageBytes[i],
+                              width: 92,
+                              height: 92,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          Positioned(
+                            top: 6,
+                            left: 6,
+                            child: InkWell(
+                              onTap: _isLoading ? null : () => _removeGalleryImageAt(i),
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withValues(alpha: 0.55),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 16,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    }),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -357,6 +854,33 @@ class _AddLabScreenState extends State<AddLabScreen> {
             padding: const EdgeInsets.all(16),
             child: Column(
               children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Text(
+                    'اختر من المميزات الشائعة',
+                    style: TextStyle(
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: _availableFeatures.map((item) {
+                    final isSelected = _features.contains(item);
+                    return FilterChip(
+                      label: Text(item),
+                      selected: isSelected,
+                      onSelected:
+                          _isLoading ? null : (v) => _toggleCommonFeature(item, v),
+                      showCheckmark: true,
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 14),
                 Row(
                   children: [
                     Expanded(
@@ -428,71 +952,160 @@ class _AddLabScreenState extends State<AddLabScreen> {
             ),
           ),
           const Divider(height: 1),
-          ..._tests.entries.map((entry) {
+          ..._availableTests.entries.map((entry) {
             final category = entry.key;
-            final tests = entry.value;
-            final controller = _testControllers[category]!;
+            final available = entry.value;
+            final selected = _selectedTestsByCategory[category] ?? <String>{};
+            final isLast = category == _availableTests.keys.last;
 
             return Column(
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        category,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: TextField(
-                              controller: controller,
-                              decoration: InputDecoration(
-                                labelText: 'إضافة تحليل',
-                                border: const OutlineInputBorder(),
-                                hintText: category == 'تحاليل روتينية'
-                                    ? 'مثال: صورة دم كاملة'
-                                    : 'مثال: هرمونات الغدة الدرقية',
-                              ),
-                              onSubmitted: (_) => _addTest(category),
+                Theme(
+                  data: Theme.of(context).copyWith(
+                    dividerColor: Colors.transparent,
+                  ),
+                  child: ExpansionTile(
+                    tilePadding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 6,
+                    ),
+                    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            category,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          IconButton.filled(
-                            onPressed: () => _addTest(category),
-                            icon: const Icon(Icons.add),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: colorScheme.primary.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(999),
+                            border: Border.all(
+                              color: colorScheme.primary.withValues(alpha: 0.18),
+                            ),
+                          ),
+                          child: Text(
+                            '${selected.length}/${available.length}',
+                            style: TextStyle(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    children: [
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: _isLoading
+                                ? null
+                                : () => _selectAllTestsInCategory(category),
+                            child: const Text('تحديد الكل'),
+                          ),
+                          const SizedBox(width: 10),
+                          TextButton(
+                            onPressed: _isLoading
+                                ? null
+                                : () => _clearAllTestsInCategory(category),
+                            child: const Text('إلغاء الكل'),
                           ),
                         ],
                       ),
-                      if (tests.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          children: tests
-                              .map(
-                                (item) => Chip(
-                                  label: Text(item),
-                                  deleteIcon: const Icon(Icons.close, size: 18),
-                                  onDeleted: () => _removeTest(category, item),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ],
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: available.map((test) {
+                          final isSelected = selected.contains(test);
+                          return FilterChip(
+                            label: Text(test),
+                            selected: isSelected,
+                            onSelected: _isLoading
+                                ? null
+                                : (_) => _toggleTestSelection(category, test),
+                            showCheckmark: true,
+                          );
+                        }).toList(),
+                      ),
                     ],
                   ),
                 ),
-                if (category != _tests.keys.last) const Divider(height: 1),
+                if (!isLast) const Divider(height: 1),
               ],
             );
           }),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'أخرى',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'أضف أي تحليل إضافي يقدمه المعمل.',
+                  style: TextStyle(
+                    color: colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _customTestController,
+                        decoration: const InputDecoration(
+                          labelText: 'اسم التحليل',
+                          border: OutlineInputBorder(),
+                          hintText: 'مثال: تحليل حساسية الغذاء',
+                        ),
+                        onSubmitted: (_) => _addCustomTest(),
+                        enabled: !_isLoading,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton.filled(
+                      onPressed: _isLoading ? null : _addCustomTest,
+                      icon: const Icon(Icons.add),
+                    ),
+                  ],
+                ),
+                if (_customTests.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _customTests
+                        .map(
+                          (item) => Chip(
+                            label: Text(item),
+                            deleteIcon: const Icon(Icons.close, size: 18),
+                            onDeleted:
+                                _isLoading ? null : () => _removeCustomTest(item),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
         ],
       ),
     );

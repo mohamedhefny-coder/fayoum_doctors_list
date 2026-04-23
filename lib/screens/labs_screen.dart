@@ -7,7 +7,9 @@ import 'add_lab_screen.dart';
 import 'lab_login_screen.dart';
 
 class LabsScreen extends StatefulWidget {
-  const LabsScreen({super.key});
+  const LabsScreen({super.key, this.initialLabName});
+
+  final String? initialLabName;
 
   @override
   State<LabsScreen> createState() => _LabsScreenState();
@@ -16,6 +18,7 @@ class LabsScreen extends StatefulWidget {
 class _LabsScreenState extends State<LabsScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _animationController;
+  bool _initialLabOpened = false;
 
   final List<String> _serviceFilters = const [
     'تحاليل عامة',
@@ -84,6 +87,36 @@ class _LabsScreenState extends State<LabsScreen>
     _loadRemoteLabs();
   }
 
+  void _maybeOpenInitialLab() {
+    if (!mounted) return;
+    if (_initialLabOpened) return;
+    if (_isLoadingRemote) return;
+
+    final rawName = widget.initialLabName ?? '';
+    final target = rawName.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (target.isEmpty) return;
+
+    _initialLabOpened = true;
+
+    final match = _allLabs.cast<_LabData?>().firstWhere((l) {
+      final candidate = (l?.model.name ?? '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+      return candidate.toLowerCase() == target.toLowerCase();
+    }, orElse: () => null);
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (match == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('لم يتم العثور على المعمل المطلوب.')),
+        );
+        return;
+      }
+      _openDetails(match);
+    });
+  }
+
   Future<void> _loadRemoteLabs() async {
     if (!mounted) return;
     setState(() => _isLoadingRemote = true);
@@ -103,6 +136,7 @@ class _LabsScreenState extends State<LabsScreen>
       // في حالة الخطأ، نستمر بالبيانات المحلية
     } finally {
       if (mounted) setState(() => _isLoadingRemote = false);
+      _maybeOpenInitialLab();
     }
   }
 

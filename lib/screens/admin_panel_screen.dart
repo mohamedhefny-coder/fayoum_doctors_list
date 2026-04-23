@@ -2,9 +2,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../services/admin_service.dart';
 import '../services/admin_realtime_notifications_service.dart';
+import '../services/hospital_service.dart';
 import '../services/lab_service.dart';
 import '../services/radiology_service.dart';
 import 'admin_add_doctor_screen.dart';
+import 'add_hospital_screen.dart';
+import 'hospital_register_screen.dart';
 import 'lab_register_screen.dart';
 import 'add_lab_screen.dart';
 import 'radiology_screen.dart';
@@ -137,9 +140,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isLoadingRadiology = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('خطأ في تحميل مراكز الأشعة: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('خطأ في تحميل مراكز الأشعة: $e')));
     }
   }
 
@@ -194,30 +197,38 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                 }
                 if (email.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('يرجى إدخال اليوزر (البريد الإلكتروني)')),
+                    const SnackBar(
+                      content: Text('يرجى إدخال اليوزر (البريد الإلكتروني)'),
+                    ),
                   );
                   return;
                 }
                 if (password.length < 6) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('كلمة المرور يجب أن تكون 6 أحرف على الأقل')),
+                    const SnackBar(
+                      content: Text('كلمة المرور يجب أن تكون 6 أحرف على الأقل'),
+                    ),
                   );
                   return;
                 }
 
                 setLocalState(() => isSaving = true);
                 try {
-                  final userId = await _adminService.createMedicalSuppliesStoreOwnerAccount(
-                    storeName: storeName,
-                    email: email,
-                    password: password,
-                  );
+                  final userId = await _adminService
+                      .createMedicalSuppliesStoreOwnerAccount(
+                        storeName: storeName,
+                        email: email,
+                        password: password,
+                      );
                   createdUserId = userId;
                   if (context.mounted) Navigator.of(context).pop();
                 } catch (e) {
                   if (!context.mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+                    SnackBar(
+                      content: Text('خطأ: $e'),
+                      backgroundColor: Colors.red,
+                    ),
                   );
                   setLocalState(() => isSaving = false);
                 }
@@ -263,10 +274,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               onPressed: isSaving
                                   ? null
                                   : () => setLocalState(
-                                        () => obscurePassword = !obscurePassword,
-                                      ),
+                                      () => obscurePassword = !obscurePassword,
+                                    ),
                               icon: Icon(
-                                obscurePassword ? Icons.visibility : Icons.visibility_off,
+                                obscurePassword
+                                    ? Icons.visibility
+                                    : Icons.visibility_off,
                               ),
                             ),
                           ),
@@ -276,7 +289,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   ),
                   actions: [
                     TextButton(
-                      onPressed: isSaving ? null : () => Navigator.of(context).pop(),
+                      onPressed: isSaving
+                          ? null
+                          : () => Navigator.of(context).pop(),
                       child: const Text('إلغاء'),
                     ),
                     ElevatedButton(
@@ -386,12 +401,12 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 
                 setLocalState(() => isSaving = true);
                 try {
-                  final userId =
-                      await _adminService.createMedicalCenterOwnerAccount(
-                    centerName: centerName,
-                    email: email,
-                    password: password,
-                  );
+                  final userId = await _adminService
+                      .createMedicalCenterOwnerAccount(
+                        centerName: centerName,
+                        email: email,
+                        password: password,
+                      );
                   createdUserId = userId;
                   if (context.mounted) Navigator.of(context).pop();
                 } catch (e) {
@@ -446,9 +461,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               onPressed: isSaving
                                   ? null
                                   : () => setLocalState(
-                                        () =>
-                                            obscurePassword = !obscurePassword,
-                                      ),
+                                      () => obscurePassword = !obscurePassword,
+                                    ),
                               icon: Icon(
                                 obscurePassword
                                     ? Icons.visibility
@@ -462,8 +476,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                   ),
                   actions: [
                     TextButton(
-                      onPressed:
-                          isSaving ? null : () => Navigator.of(context).pop(),
+                      onPressed: isSaving
+                          ? null
+                          : () => Navigator.of(context).pop(),
                       child: const Text('إلغاء'),
                     ),
                     ElevatedButton(
@@ -524,7 +539,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     }
   }
 
-  Future<void> _handleToggleSuppliesPublished(Map<String, dynamic> store) async {
+  Future<void> _handleToggleSuppliesPublished(
+    Map<String, dynamic> store,
+  ) async {
     final current = store['is_published'] == true;
     final name = (store['name'] ?? '').toString();
     final confirm = await showDialog<bool>(
@@ -605,14 +622,17 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       try {
         await _adminService.deleteMedicalSuppliesStore(storeId);
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('تم حذف المتجر بنجاح')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('تم حذف المتجر بنجاح')));
         _loadMedicalSuppliesStores();
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطأ في الحذف: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('خطأ في الحذف: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -655,7 +675,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطأ في الحذف: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('خطأ في الحذف: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -830,9 +853,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     try {
       await _adminService.rejectMedicalCenterPublishRequest(id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('تم رفض طلب النشر')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('تم رفض طلب النشر')));
       _loadMedicalCenters();
     } catch (e) {
       if (!mounted) return;
@@ -959,7 +982,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       } catch (e) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('خطأ في الحذف: $e'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('خطأ في الحذف: $e'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     }
@@ -990,18 +1016,63 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   }
 
   Future<void> _handleAddHospital() async {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('إضافة مستشفى: سيتم تنفيذها لاحقاً')),
+    debugPrint('👨‍💼 Admin: Opening hospital registration...');
+    final result = await Navigator.of(context).push<Map<String, dynamic>>(
+      MaterialPageRoute(builder: (context) => const HospitalRegisterScreen()),
     );
+
+    if (result is Map<String, dynamic> && result['success'] == true) {
+      if (!mounted) return;
+
+      try {
+        // تسجيل خروج المدير مؤقتاً
+        await _adminService.signOut();
+
+        // تسجيل دخول المستشفى
+        await HospitalService().loginHospital(
+          email: result['email'],
+          password: result['password'],
+        );
+
+        if (!mounted) return;
+
+        // فتح صفحة إضافة بيانات المستشفى
+        final hospitalDataResult = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(builder: (context) => const AddHospitalScreen()),
+        );
+
+        // تسجيل خروج المستشفى
+        await HospitalService().signOut();
+
+        if (!mounted) return;
+
+        if (hospitalDataResult == true) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'تم إضافة المستشفى بنجاح. الرجاء تسجيل الدخول مرة أخرى',
+              ),
+            ),
+          );
+        }
+
+        // العودة إلى صفحة تسجيل الدخول
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      } catch (e) {
+        debugPrint('👨‍💼 Admin: Error during hospital flow: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _handleAddRadiology() async {
     debugPrint('👨‍💼 Admin: Opening radiology center registration...');
     final result = await Navigator.of(context).push<Map<String, dynamic>>(
-      MaterialPageRoute(
-        builder: (context) => const RadiologyRegisterScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const RadiologyRegisterScreen()),
     );
 
     if (result is Map<String, dynamic> && result['success'] == true) {
@@ -1047,10 +1118,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         debugPrint('👨‍💼 Admin: Error during radiology center flow: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('خطأ: $e'),
-              backgroundColor: Colors.red,
-            ),
+            SnackBar(content: Text('خطأ: $e'), backgroundColor: Colors.red),
           );
         }
       }
@@ -1791,7 +1859,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final phone = (center['phone'] ?? '').toString().toLowerCase();
       final whatsapp = (center['whatsapp'] ?? '').toString().toLowerCase();
 
-      final matchesSearch = query.isEmpty ||
+      final matchesSearch =
+          query.isEmpty ||
           name.contains(query) ||
           phone.contains(query) ||
           whatsapp.contains(query);
@@ -1834,7 +1903,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final isPublished = center['is_published'] == true;
       final matchesFilter = _radiologyStatusFilter == 'all'
           ? true
-          : (_radiologyStatusFilter == 'published' ? isPublished : !isPublished);
+          : (_radiologyStatusFilter == 'published'
+                ? isPublished
+                : !isPublished);
 
       return matchesSearch && matchesFilter;
     }).toList();
@@ -1850,7 +1921,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
       final phone = (store['phone'] ?? '').toString().toLowerCase();
       final whatsapp = (store['whatsapp'] ?? '').toString().toLowerCase();
 
-      final matchesSearch = query.isEmpty ||
+      final matchesSearch =
+          query.isEmpty ||
           name.contains(query) ||
           phone.contains(query) ||
           whatsapp.contains(query);
@@ -1870,147 +1942,150 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
         child: Scaffold(
           backgroundColor: const Color(0xFFF1F5F9),
           appBar: AppBar(
-          title: const Text('لوحة تحكم المدير'),
-          backgroundColor: const Color(0xFF2196F3),
-          foregroundColor: Colors.white,
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'الأطباء'),
-              Tab(text: 'مراكز طبية'),
-              Tab(text: 'مراكز أشعة'),
-              Tab(text: 'مستلزمات طبية'),
-            ],
-          ),
-          actions: [
-            PopupMenuButton<String>(
-              icon: const Icon(Icons.add),
-              tooltip: 'إضافة',
-              onSelected: (value) {
-                switch (value) {
-                  case 'add_doctor':
-                    _handleAddDoctor();
-                    break;
-                  case 'add_lab':
-                    _handleAddLab();
-                    break;
-                  case 'add_pharmacy':
-                    _handleAddPharmacy();
-                    break;
-                  case 'add_hospital':
-                    _handleAddHospital();
-                    break;
-                  case 'add_medical_center':
-                    _handleAddMedicalCenter();
-                    break;
-                  case 'add_radiology':
-                    _handleAddRadiology();
-                    break;
-                  case 'add_supplies_store':
-                    _handleAddMedicalSuppliesStore();
-                    break;
-                }
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(
-                  value: 'add_doctor',
-                  child: Row(
-                    children: [
-                      Icon(Icons.person_add, color: Color(0xFF4CAF50)),
-                      SizedBox(width: 8),
-                      Text('إضافة طبيب'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'add_lab',
-                  child: Row(
-                    children: [
-                      Icon(Icons.biotech, color: Color(0xFF9C27B0)),
-                      SizedBox(width: 8),
-                      Text('إضافة معمل'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'add_pharmacy',
-                  child: Row(
-                    children: [
-                      Icon(Icons.local_pharmacy, color: Color(0xFF00BCD4)),
-                      SizedBox(width: 8),
-                      Text('إضافة صيدلية'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'add_hospital',
-                  child: Row(
-                    children: [
-                      Icon(Icons.local_hospital, color: Color(0xFFFF5722)),
-                      SizedBox(width: 8),
-                      Text('إضافة مستشفى'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'add_medical_center',
-                  child: Row(
-                    children: [
-                      Icon(Icons.medical_services, color: Color(0xFF00BCD4)),
-                      SizedBox(width: 8),
-                      Text('إضافة مركز طبي'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'add_radiology',
-                  child: Row(
-                    children: [
-                      Icon(Icons.medical_information, color: Color(0xFF9C27B0)),
-                      SizedBox(width: 8),
-                      Text('إضافة مركز أشعة'),
-                    ],
-                  ),
-                ),
-                PopupMenuItem(
-                  value: 'add_supplies_store',
-                  child: Row(
-                    children: [
-                      Icon(Icons.storefront, color: Color(0xFF2196F3)),
-                      SizedBox(width: 8),
-                      Text('إضافة متجر مستلزمات'),
-                    ],
-                  ),
-                ),
+            title: const Text('لوحة تحكم المدير'),
+            backgroundColor: const Color(0xFF2196F3),
+            foregroundColor: Colors.white,
+            bottom: const TabBar(
+              tabs: [
+                Tab(text: 'الأطباء'),
+                Tab(text: 'مراكز طبية'),
+                Tab(text: 'مراكز أشعة'),
+                Tab(text: 'مستلزمات طبية'),
               ],
             ),
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: () {
-                _loadDoctors();
-                _loadMedicalCenters();
-                _loadRadiologyCenters();
-                _loadMedicalSuppliesStores();
-              },
-              tooltip: 'تحديث',
-            ),
-            IconButton(
-              icon: const Icon(Icons.mark_email_unread),
-              onPressed: () {
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (context) => const AdminRepliesScreen(),
+            actions: [
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.add),
+                tooltip: 'إضافة',
+                onSelected: (value) {
+                  switch (value) {
+                    case 'add_doctor':
+                      _handleAddDoctor();
+                      break;
+                    case 'add_lab':
+                      _handleAddLab();
+                      break;
+                    case 'add_pharmacy':
+                      _handleAddPharmacy();
+                      break;
+                    case 'add_hospital':
+                      _handleAddHospital();
+                      break;
+                    case 'add_medical_center':
+                      _handleAddMedicalCenter();
+                      break;
+                    case 'add_radiology':
+                      _handleAddRadiology();
+                      break;
+                    case 'add_supplies_store':
+                      _handleAddMedicalSuppliesStore();
+                      break;
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: 'add_doctor',
+                    child: Row(
+                      children: [
+                        Icon(Icons.person_add, color: Color(0xFF4CAF50)),
+                        SizedBox(width: 8),
+                        Text('إضافة طبيب'),
+                      ],
+                    ),
                   ),
-                );
-              },
-              tooltip: 'ردود الأطباء',
-            ),
-            IconButton(
-              icon: const Icon(Icons.logout),
-              onPressed: _handleLogout,
-              tooltip: 'تسجيل الخروج',
-            ),
-          ],
-        ),
+                  PopupMenuItem(
+                    value: 'add_lab',
+                    child: Row(
+                      children: [
+                        Icon(Icons.biotech, color: Color(0xFF9C27B0)),
+                        SizedBox(width: 8),
+                        Text('إضافة معمل'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'add_pharmacy',
+                    child: Row(
+                      children: [
+                        Icon(Icons.local_pharmacy, color: Color(0xFF00BCD4)),
+                        SizedBox(width: 8),
+                        Text('إضافة صيدلية'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'add_hospital',
+                    child: Row(
+                      children: [
+                        Icon(Icons.local_hospital, color: Color(0xFFFF5722)),
+                        SizedBox(width: 8),
+                        Text('إضافة مستشفى'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'add_medical_center',
+                    child: Row(
+                      children: [
+                        Icon(Icons.medical_services, color: Color(0xFF00BCD4)),
+                        SizedBox(width: 8),
+                        Text('إضافة مركز طبي'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'add_radiology',
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.medical_information,
+                          color: Color(0xFF9C27B0),
+                        ),
+                        SizedBox(width: 8),
+                        Text('إضافة مركز أشعة'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'add_supplies_store',
+                    child: Row(
+                      children: [
+                        Icon(Icons.storefront, color: Color(0xFF2196F3)),
+                        SizedBox(width: 8),
+                        Text('إضافة متجر مستلزمات'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: () {
+                  _loadDoctors();
+                  _loadMedicalCenters();
+                  _loadRadiologyCenters();
+                  _loadMedicalSuppliesStores();
+                },
+                tooltip: 'تحديث',
+              ),
+              IconButton(
+                icon: const Icon(Icons.mark_email_unread),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (context) => const AdminRepliesScreen(),
+                    ),
+                  );
+                },
+                tooltip: 'ردود الأطباء',
+              ),
+              IconButton(
+                icon: const Icon(Icons.logout),
+                onPressed: _handleLogout,
+                tooltip: 'تسجيل الخروج',
+              ),
+            ],
+          ),
           body: TabBarView(
             children: [
               // ====== Doctors tab (existing UI) ======
@@ -2030,7 +2105,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.05),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.05,
+                                      ),
                                       blurRadius: 10,
                                       offset: const Offset(0, 2),
                                     ),
@@ -2083,7 +2160,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               const SizedBox(height: 12),
                               TextField(
                                 decoration: InputDecoration(
-                                  hintText: 'بحث باسم الطبيب أو البريد الإلكتروني...',
+                                  hintText:
+                                      'بحث باسم الطبيب أو البريد الإلكتروني...',
                                   prefixIcon: const Icon(Icons.search),
                                   filled: true,
                                   fillColor: Colors.white,
@@ -2115,31 +2193,44 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                       label: 'منشور',
                                       isSelected: _statusFilter == 'published',
                                       onTap: () {
-                                        setState(() => _statusFilter = 'published');
+                                        setState(
+                                          () => _statusFilter = 'published',
+                                        );
                                       },
                                     ),
                                     const SizedBox(width: 8),
                                     _FilterChip(
                                       label: 'طلب نشر',
-                                      isSelected: _statusFilter == 'publish_requested',
+                                      isSelected:
+                                          _statusFilter == 'publish_requested',
                                       onTap: () {
-                                        setState(() => _statusFilter = 'publish_requested');
+                                        setState(
+                                          () => _statusFilter =
+                                              'publish_requested',
+                                        );
                                       },
                                     ),
                                     const SizedBox(width: 8),
                                     _FilterChip(
                                       label: 'طلب حذف',
-                                      isSelected: _statusFilter == 'delete_requested',
+                                      isSelected:
+                                          _statusFilter == 'delete_requested',
                                       onTap: () {
-                                        setState(() => _statusFilter = 'delete_requested');
+                                        setState(
+                                          () => _statusFilter =
+                                              'delete_requested',
+                                        );
                                       },
                                     ),
                                     const SizedBox(width: 8),
                                     _FilterChip(
                                       label: 'غير منشور',
-                                      isSelected: _statusFilter == 'not_published',
+                                      isSelected:
+                                          _statusFilter == 'not_published',
                                       onTap: () {
-                                        setState(() => _statusFilter = 'not_published');
+                                        setState(
+                                          () => _statusFilter = 'not_published',
+                                        );
                                       },
                                     ),
                                   ],
@@ -2160,15 +2251,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                   ),
                                 )
                               : ListView.builder(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
                                   itemCount: filteredDoctors.length,
                                   itemBuilder: (context, index) {
                                     final doctor = filteredDoctors[index];
-                                    final publishRequested = doctor['publish_requested'] == true;
-                                    final isPublished = doctor['is_published'] == true;
-                                    final deleteRequested = doctor['delete_requested'] == true;
+                                    final publishRequested =
+                                        doctor['publish_requested'] == true;
+                                    final isPublished =
+                                        doctor['is_published'] == true;
+                                    final deleteRequested =
+                                        doctor['delete_requested'] == true;
 
-                                    if (kDebugMode && doctor['delete_requested'] != null) {
+                                    if (kDebugMode &&
+                                        doctor['delete_requested'] != null) {
                                       debugPrint(
                                         'DEBUG: Doctor ${doctor['full_name']} - delete_requested: ${doctor['delete_requested']}',
                                       );
@@ -2181,12 +2278,19 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                       ),
                                       elevation: 2,
                                       child: ListTile(
-                                        contentPadding: const EdgeInsets.all(16),
+                                        contentPadding: const EdgeInsets.all(
+                                          16,
+                                        ),
                                         leading: CircleAvatar(
                                           radius: 30,
-                                          backgroundColor: const Color(0xFF2196F3),
+                                          backgroundColor: const Color(
+                                            0xFF2196F3,
+                                          ),
                                           child: Text(
-                                            doctor['full_name']?.toString().substring(0, 1) ?? '؟',
+                                            doctor['full_name']
+                                                    ?.toString()
+                                                    .substring(0, 1) ??
+                                                '؟',
                                             style: const TextStyle(
                                               color: Colors.white,
                                               fontSize: 24,
@@ -2202,10 +2306,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                           ),
                                         ),
                                         subtitle: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             const SizedBox(height: 4),
-                                            Text(doctor['specialization'] ?? 'غير محدد'),
+                                            Text(
+                                              doctor['specialization'] ??
+                                                  'غير محدد',
+                                            ),
                                             if (deleteRequested)
                                               const Text(
                                                 '⚠️ طلب حذف الحساب',
@@ -2244,11 +2352,15 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                               ),
                                             Text(
                                               doctor['email'] ?? '',
-                                              style: const TextStyle(fontSize: 12),
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                              ),
                                             ),
                                             Text(
                                               'رقم الهاتف: ${doctor['phone'] ?? ''}',
-                                              style: const TextStyle(fontSize: 12),
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -2259,30 +2371,39 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                                 doctor['id'],
                                                 const Color(0xFF246BCE),
                                               );
-                                            } else if (value == 'approve_delete') {
+                                            } else if (value ==
+                                                'approve_delete') {
                                               _handleApproveDeleteRequest(
                                                 doctor['id'],
                                                 doctor['full_name'] ?? '',
                                               );
-                                            } else if (value == 'reject_delete') {
+                                            } else if (value ==
+                                                'reject_delete') {
                                               _handleRejectDeleteRequest(
                                                 doctor['id'],
                                                 doctor['full_name'] ?? '',
                                               );
-                                            } else if (value == 'approve_publish') {
+                                            } else if (value ==
+                                                'approve_publish') {
                                               _handleApprovePublish(
                                                 doctor['id'],
                                                 doctor['full_name'] ?? '',
                                               );
-                                            } else if (value == 'recommended_settings') {
-                                              _showRecommendedSettingsDialog(context, doctor);
-                                            } else if (value == 'send_message') {
+                                            } else if (value ==
+                                                'recommended_settings') {
+                                              _showRecommendedSettingsDialog(
+                                                context,
+                                                doctor,
+                                              );
+                                            } else if (value ==
+                                                'send_message') {
                                               _showSendMessageDialog(
                                                 context,
                                                 doctor['id'],
                                                 doctor['full_name'] ?? '',
                                               );
-                                            } else if (value == 'reset_password') {
+                                            } else if (value ==
+                                                'reset_password') {
                                               _handleResetPassword(
                                                 doctor['id'],
                                                 doctor['full_name'] ?? '',
@@ -2299,7 +2420,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                               value: 'preview_profile',
                                               child: Row(
                                                 children: [
-                                                  Icon(Icons.visibility, color: Colors.blueGrey),
+                                                  Icon(
+                                                    Icons.visibility,
+                                                    color: Colors.blueGrey,
+                                                  ),
                                                   SizedBox(width: 8),
                                                   Text('معاينة صفحة الطبيب'),
                                                 ],
@@ -2311,9 +2435,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                                 value: 'approve_delete',
                                                 child: Row(
                                                   children: [
-                                                    Icon(Icons.check_circle, color: Colors.red),
+                                                    Icon(
+                                                      Icons.check_circle,
+                                                      color: Colors.red,
+                                                    ),
                                                     SizedBox(width: 8),
-                                                    Text('موافقة على حذف الحساب'),
+                                                    Text(
+                                                      'موافقة على حذف الحساب',
+                                                    ),
                                                   ],
                                                 ),
                                               ),
@@ -2321,7 +2450,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                                 value: 'reject_delete',
                                                 child: Row(
                                                   children: [
-                                                    Icon(Icons.cancel, color: Colors.orange),
+                                                    Icon(
+                                                      Icons.cancel,
+                                                      color: Colors.orange,
+                                                    ),
                                                     SizedBox(width: 8),
                                                     Text('رفض طلب الحذف'),
                                                   ],
@@ -2333,7 +2465,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                                 value: 'approve_publish',
                                                 child: Row(
                                                   children: [
-                                                    Icon(Icons.verified, color: Colors.green),
+                                                    Icon(
+                                                      Icons.verified,
+                                                      color: Colors.green,
+                                                    ),
                                                     SizedBox(width: 8),
                                                     Text('قبول طلب النشر'),
                                                   ],
@@ -2344,9 +2479,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                                 value: 'recommended_settings',
                                                 child: Row(
                                                   children: [
-                                                    Icon(Icons.star_border, color: Colors.purple),
+                                                    Icon(
+                                                      Icons.star_border,
+                                                      color: Colors.purple,
+                                                    ),
                                                     SizedBox(width: 8),
-                                                    Text('إعدادات العرض الموصى به'),
+                                                    Text(
+                                                      'إعدادات العرض الموصى به',
+                                                    ),
                                                   ],
                                                 ),
                                               ),
@@ -2355,7 +2495,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                                 value: 'send_message',
                                                 child: Row(
                                                   children: [
-                                                    Icon(Icons.mail_outline, color: Colors.blue),
+                                                    Icon(
+                                                      Icons.mail_outline,
+                                                      color: Colors.blue,
+                                                    ),
                                                     SizedBox(width: 8),
                                                     Text('إرسال رسالة'),
                                                   ],
@@ -2366,9 +2509,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                                 value: 'reset_password',
                                                 child: Row(
                                                   children: [
-                                                    Icon(Icons.lock_reset, color: Colors.orange),
+                                                    Icon(
+                                                      Icons.lock_reset,
+                                                      color: Colors.orange,
+                                                    ),
                                                     SizedBox(width: 8),
-                                                    Text('إعادة تعيين كلمة المرور'),
+                                                    Text(
+                                                      'إعادة تعيين كلمة المرور',
+                                                    ),
                                                   ],
                                                 ),
                                               ),
@@ -2377,7 +2525,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                                 value: 'delete',
                                                 child: Row(
                                                   children: [
-                                                    Icon(Icons.delete, color: Colors.red),
+                                                    Icon(
+                                                      Icons.delete,
+                                                      color: Colors.red,
+                                                    ),
                                                     SizedBox(width: 8),
                                                     Text('حذف الطبيب'),
                                                   ],
@@ -2410,7 +2561,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.05),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.05,
+                                      ),
                                       blurRadius: 10,
                                       offset: const Offset(0, 2),
                                     ),
@@ -2454,7 +2607,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                           label: 'غير منشور',
                                           color: Colors.grey,
                                           count:
-                                              totalMedicalCenters - publishedMedicalCenters,
+                                              totalMedicalCenters -
+                                              publishedMedicalCenters,
                                         ),
                                       ],
                                     ),
@@ -2464,7 +2618,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               const SizedBox(height: 12),
                               TextField(
                                 decoration: InputDecoration(
-                                  hintText: 'بحث باسم المركز أو رقم الهاتف أو واتساب...',
+                                  hintText:
+                                      'بحث باسم المركز أو رقم الهاتف أو واتساب...',
                                   prefixIcon: const Icon(Icons.search),
                                   filled: true,
                                   fillColor: Colors.white,
@@ -2489,13 +2644,15 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                       isSelected:
                                           _medicalCentersStatusFilter == 'all',
                                       onTap: () => setState(
-                                        () => _medicalCentersStatusFilter = 'all',
+                                        () =>
+                                            _medicalCentersStatusFilter = 'all',
                                       ),
                                     ),
                                     const SizedBox(width: 8),
                                     _FilterChip(
                                       label: 'طلبات نشر',
-                                      isSelected: _medicalCentersStatusFilter ==
+                                      isSelected:
+                                          _medicalCentersStatusFilter ==
                                           'publish_requested',
                                       onTap: () => setState(
                                         () => _medicalCentersStatusFilter =
@@ -2505,7 +2662,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                     const SizedBox(width: 8),
                                     _FilterChip(
                                       label: 'منشور',
-                                      isSelected: _medicalCentersStatusFilter ==
+                                      isSelected:
+                                          _medicalCentersStatusFilter ==
                                           'published',
                                       onTap: () => setState(
                                         () => _medicalCentersStatusFilter =
@@ -2515,7 +2673,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                     const SizedBox(width: 8),
                                     _FilterChip(
                                       label: 'غير منشور',
-                                      isSelected: _medicalCentersStatusFilter ==
+                                      isSelected:
+                                          _medicalCentersStatusFilter ==
                                           'not_published',
                                       onTap: () => setState(
                                         () => _medicalCentersStatusFilter =
@@ -2540,20 +2699,23 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                   ),
                                 )
                               : ListView.builder(
-                                  padding:
-                                      const EdgeInsets.symmetric(horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
                                   itemCount: filteredMedicalCenters.length,
                                   itemBuilder: (context, index) {
-                                    final center = filteredMedicalCenters[index];
+                                    final center =
+                                        filteredMedicalCenters[index];
                                     final isPublished =
                                         center['is_published'] == true;
                                     final hasBooking =
                                         center['has_booking'] == true;
                                     final publishRequested =
                                         center['publish_requested'] == true;
-                                    final name =
-                                        (center['name'] ?? 'غير محدد').toString();
-                                    final phone = (center['phone'] ?? '').toString();
+                                    final name = (center['name'] ?? 'غير محدد')
+                                        .toString();
+                                    final phone = (center['phone'] ?? '')
+                                        .toString();
 
                                     return Card(
                                       margin: const EdgeInsets.only(bottom: 12),
@@ -2562,8 +2724,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                       ),
                                       elevation: 2,
                                       child: ListTile(
-                                        contentPadding:
-                                            const EdgeInsets.all(16),
+                                        contentPadding: const EdgeInsets.all(
+                                          16,
+                                        ),
                                         leading: const CircleAvatar(
                                           radius: 30,
                                           backgroundColor: Color(0xFF00BCD4),
@@ -2620,8 +2783,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                             ),
                                             Text(
                                               'الهاتف: $phone',
-                                              style:
-                                                  const TextStyle(fontSize: 12),
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                              ),
                                             ),
                                           ],
                                         ),
@@ -2631,14 +2795,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                               _handleApproveMedicalCenterPublishRequest(
                                                 center,
                                               );
-                                            } else if (value == 'reject_publish') {
+                                            } else if (value ==
+                                                'reject_publish') {
                                               _handleRejectMedicalCenterPublishRequest(
                                                 center,
                                               );
-                                            } else if (value == 'toggle_publish') {
-                                              _handleToggleMedicalCenterPublished(center);
-                                            } else if (value == 'toggle_booking') {
-                                              _handleToggleMedicalCenterBooking(center);
+                                            } else if (value ==
+                                                'toggle_publish') {
+                                              _handleToggleMedicalCenterPublished(
+                                                center,
+                                              );
+                                            } else if (value ==
+                                                'toggle_booking') {
+                                              _handleToggleMedicalCenterBooking(
+                                                center,
+                                              );
                                             } else if (value == 'delete') {
                                               _handleDeleteMedicalCenter(
                                                 (center['id'] ?? '').toString(),
@@ -2687,7 +2858,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                                   ),
                                                   const SizedBox(width: 8),
                                                   Text(
-                                                    isPublished ? 'إلغاء النشر' : 'نشر',
+                                                    isPublished
+                                                        ? 'إلغاء النشر'
+                                                        : 'نشر',
                                                   ),
                                                 ],
                                               ),
@@ -2749,7 +2922,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.05),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.05,
+                                      ),
                                       blurRadius: 10,
                                       offset: const Offset(0, 2),
                                     ),
@@ -2787,7 +2962,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                         _StatusPill(
                                           label: 'غير منشور',
                                           color: Colors.grey,
-                                          count: totalCenters - publishedCenters,
+                                          count:
+                                              totalCenters - publishedCenters,
                                         ),
                                       ],
                                     ),
@@ -2817,20 +2993,32 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                   children: [
                                     _FilterChip(
                                       label: 'الكل',
-                                      isSelected: _radiologyStatusFilter == 'all',
-                                      onTap: () => setState(() => _radiologyStatusFilter = 'all'),
+                                      isSelected:
+                                          _radiologyStatusFilter == 'all',
+                                      onTap: () => setState(
+                                        () => _radiologyStatusFilter = 'all',
+                                      ),
                                     ),
                                     const SizedBox(width: 8),
                                     _FilterChip(
                                       label: 'منشور',
-                                      isSelected: _radiologyStatusFilter == 'published',
-                                      onTap: () => setState(() => _radiologyStatusFilter = 'published'),
+                                      isSelected:
+                                          _radiologyStatusFilter == 'published',
+                                      onTap: () => setState(
+                                        () => _radiologyStatusFilter =
+                                            'published',
+                                      ),
                                     ),
                                     const SizedBox(width: 8),
                                     _FilterChip(
                                       label: 'غير منشور',
-                                      isSelected: _radiologyStatusFilter == 'not_published',
-                                      onTap: () => setState(() => _radiologyStatusFilter = 'not_published'),
+                                      isSelected:
+                                          _radiologyStatusFilter ==
+                                          'not_published',
+                                      onTap: () => setState(
+                                        () => _radiologyStatusFilter =
+                                            'not_published',
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -2843,17 +3031,25 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               ? const Center(
                                   child: Text(
                                     'لا توجد نتائج مطابقة',
-                                    style: TextStyle(fontSize: 18, color: Color(0xFF666666)),
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: Color(0xFF666666),
+                                    ),
                                   ),
                                 )
                               : ListView.builder(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
                                   itemCount: filteredCenters.length,
                                   itemBuilder: (context, index) {
                                     final center = filteredCenters[index];
-                                    final isPublished = center['is_published'] == true;
-                                    final hasBooking = center['has_booking'] == true;
-                                    final name = (center['name'] ?? 'غير محدد').toString();
+                                    final isPublished =
+                                        center['is_published'] == true;
+                                    final hasBooking =
+                                        center['has_booking'] == true;
+                                    final name = (center['name'] ?? 'غير محدد')
+                                        .toString();
 
                                     return Card(
                                       margin: const EdgeInsets.only(bottom: 12),
@@ -2862,52 +3058,82 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                       ),
                                       elevation: 2,
                                       child: ListTile(
-                                        contentPadding: const EdgeInsets.all(16),
+                                        contentPadding: const EdgeInsets.all(
+                                          16,
+                                        ),
                                         leading: const CircleAvatar(
                                           radius: 30,
                                           backgroundColor: Color(0xFF9C27B0),
-                                          child: Icon(Icons.medical_information, color: Colors.white),
+                                          child: Icon(
+                                            Icons.medical_information,
+                                            color: Colors.white,
+                                          ),
                                         ),
                                         title: Text(
                                           name,
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
                                         ),
                                         subtitle: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             const SizedBox(height: 4),
                                             Text(
-                                              isPublished ? 'الحالة: منشور' : 'الحالة: غير منشور',
+                                              isPublished
+                                                  ? 'الحالة: منشور'
+                                                  : 'الحالة: غير منشور',
                                               style: TextStyle(
                                                 fontSize: 12,
-                                                color: isPublished ? Colors.green : Colors.grey,
+                                                color: isPublished
+                                                    ? Colors.green
+                                                    : Colors.grey,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
                                             Text(
-                                              hasBooking ? 'الحجز: مُفعّل' : 'الحجز: غير مُفعّل',
+                                              hasBooking
+                                                  ? 'الحجز: مُفعّل'
+                                                  : 'الحجز: غير مُفعّل',
                                               style: TextStyle(
                                                 fontSize: 12,
-                                                color: hasBooking ? Colors.blue : Colors.grey,
+                                                color: hasBooking
+                                                    ? Colors.blue
+                                                    : Colors.grey,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
                                             Text(
                                               'الهاتف: ${(center['phone'] ?? '').toString()}',
-                                              style: const TextStyle(fontSize: 12),
+                                              style: const TextStyle(
+                                                fontSize: 12,
+                                              ),
                                             ),
                                           ],
                                         ),
                                         trailing: PopupMenuButton<String>(
                                           onSelected: (value) {
                                             if (value == 'preview') {
-                                              _handlePreviewRadiologyCenter(center);
-                                            } else if (value == 'toggle_publish') {
-                                              _handleToggleRadiologyPublished(center);
-                                            } else if (value == 'toggle_booking') {
-                                              _handleToggleRadiologyBooking(center);
+                                              _handlePreviewRadiologyCenter(
+                                                center,
+                                              );
+                                            } else if (value ==
+                                                'toggle_publish') {
+                                              _handleToggleRadiologyPublished(
+                                                center,
+                                              );
+                                            } else if (value ==
+                                                'toggle_booking') {
+                                              _handleToggleRadiologyBooking(
+                                                center,
+                                              );
                                             } else if (value == 'delete') {
-                                              _handleDeleteRadiologyCenter(center['id'], name);
+                                              _handleDeleteRadiologyCenter(
+                                                center['id'],
+                                                name,
+                                              );
                                             }
                                           },
                                           itemBuilder: (context) => [
@@ -2915,7 +3141,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                               value: 'preview',
                                               child: Row(
                                                 children: [
-                                                  Icon(Icons.visibility, color: Colors.blueGrey),
+                                                  Icon(
+                                                    Icons.visibility,
+                                                    color: Colors.blueGrey,
+                                                  ),
                                                   SizedBox(width: 8),
                                                   Text('معاينة الصفحة'),
                                                 ],
@@ -2931,7 +3160,11 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                                     color: Colors.green,
                                                   ),
                                                   const SizedBox(width: 8),
-                                                  Text(isPublished ? 'إلغاء النشر' : 'نشر'),
+                                                  Text(
+                                                    isPublished
+                                                        ? 'إلغاء النشر'
+                                                        : 'نشر',
+                                                  ),
                                                 ],
                                               ),
                                             ),
@@ -2939,9 +3172,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                               value: 'toggle_booking',
                                               child: Row(
                                                 children: [
-                                                  const Icon(Icons.event_available, color: Colors.blue),
+                                                  const Icon(
+                                                    Icons.event_available,
+                                                    color: Colors.blue,
+                                                  ),
                                                   const SizedBox(width: 8),
-                                                  Text(hasBooking ? 'إيقاف الحجز' : 'تفعيل الحجز'),
+                                                  Text(
+                                                    hasBooking
+                                                        ? 'إيقاف الحجز'
+                                                        : 'تفعيل الحجز',
+                                                  ),
                                                 ],
                                               ),
                                             ),
@@ -2949,7 +3189,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                               value: 'delete',
                                               child: Row(
                                                 children: [
-                                                  Icon(Icons.delete, color: Colors.red),
+                                                  Icon(
+                                                    Icons.delete,
+                                                    color: Colors.red,
+                                                  ),
                                                   SizedBox(width: 8),
                                                   Text('حذف المركز'),
                                                 ],
@@ -2982,7 +3225,9 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                   borderRadius: BorderRadius.circular(16),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.05),
+                                      color: Colors.black.withValues(
+                                        alpha: 0.05,
+                                      ),
                                       blurRadius: 10,
                                       offset: const Offset(0, 2),
                                     ),
@@ -3030,7 +3275,8 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               const SizedBox(height: 12),
                               TextField(
                                 decoration: InputDecoration(
-                                  hintText: 'بحث باسم المتجر أو رقم الهاتف أو واتساب...',
+                                  hintText:
+                                      'بحث باسم المتجر أو رقم الهاتف أو واتساب...',
                                   prefixIcon: const Icon(Icons.search),
                                   filled: true,
                                   fillColor: Colors.white,
@@ -3050,20 +3296,32 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                   children: [
                                     _FilterChip(
                                       label: 'الكل',
-                                      isSelected: _suppliesStatusFilter == 'all',
-                                      onTap: () => setState(() => _suppliesStatusFilter = 'all'),
+                                      isSelected:
+                                          _suppliesStatusFilter == 'all',
+                                      onTap: () => setState(
+                                        () => _suppliesStatusFilter = 'all',
+                                      ),
                                     ),
                                     const SizedBox(width: 8),
                                     _FilterChip(
                                       label: 'منشور',
-                                      isSelected: _suppliesStatusFilter == 'published',
-                                      onTap: () => setState(() => _suppliesStatusFilter = 'published'),
+                                      isSelected:
+                                          _suppliesStatusFilter == 'published',
+                                      onTap: () => setState(
+                                        () =>
+                                            _suppliesStatusFilter = 'published',
+                                      ),
                                     ),
                                     const SizedBox(width: 8),
                                     _FilterChip(
                                       label: 'غير منشور',
-                                      isSelected: _suppliesStatusFilter == 'not_published',
-                                      onTap: () => setState(() => _suppliesStatusFilter = 'not_published'),
+                                      isSelected:
+                                          _suppliesStatusFilter ==
+                                          'not_published',
+                                      onTap: () => setState(
+                                        () => _suppliesStatusFilter =
+                                            'not_published',
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -3076,18 +3334,27 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                               ? const Center(
                                   child: Text(
                                     'لا توجد نتائج مطابقة',
-                                    style: TextStyle(fontSize: 18, color: Color(0xFF666666)),
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: Color(0xFF666666),
+                                    ),
                                   ),
                                 )
                               : ListView.builder(
-                                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                  ),
                                   itemCount: filteredStores.length,
                                   itemBuilder: (context, index) {
                                     final store = filteredStores[index];
-                                    final isPublished = store['is_published'] == true;
-                                    final name = (store['name'] ?? 'غير محدد').toString();
-                                    final phone = (store['phone'] ?? '').toString();
-                                    final whatsapp = (store['whatsapp'] ?? '').toString();
+                                    final isPublished =
+                                        store['is_published'] == true;
+                                    final name = (store['name'] ?? 'غير محدد')
+                                        .toString();
+                                    final phone = (store['phone'] ?? '')
+                                        .toString();
+                                    final whatsapp = (store['whatsapp'] ?? '')
+                                        .toString();
 
                                     return Card(
                                       margin: const EdgeInsets.only(bottom: 12),
@@ -3096,46 +3363,68 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                       ),
                                       elevation: 2,
                                       child: ListTile(
-                                        contentPadding: const EdgeInsets.all(16),
+                                        contentPadding: const EdgeInsets.all(
+                                          16,
+                                        ),
                                         leading: const CircleAvatar(
                                           radius: 30,
                                           backgroundColor: Color(0xFF2196F3),
-                                          child: Icon(Icons.storefront, color: Colors.white),
+                                          child: Icon(
+                                            Icons.storefront,
+                                            color: Colors.white,
+                                          ),
                                         ),
                                         title: Text(
                                           name,
-                                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.bold,
+                                            fontSize: 16,
+                                          ),
                                         ),
                                         subtitle: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
                                             const SizedBox(height: 4),
                                             Text(
-                                              isPublished ? 'الحالة: منشور' : 'الحالة: غير منشور',
+                                              isPublished
+                                                  ? 'الحالة: منشور'
+                                                  : 'الحالة: غير منشور',
                                               style: TextStyle(
                                                 fontSize: 12,
-                                                color: isPublished ? Colors.green : Colors.grey,
+                                                color: isPublished
+                                                    ? Colors.green
+                                                    : Colors.grey,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
                                             if (phone.isNotEmpty)
                                               Text(
                                                 'الهاتف: $phone',
-                                                style: const TextStyle(fontSize: 12),
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                ),
                                               ),
                                             if (whatsapp.isNotEmpty)
                                               Text(
                                                 'واتساب: $whatsapp',
-                                                style: const TextStyle(fontSize: 12),
+                                                style: const TextStyle(
+                                                  fontSize: 12,
+                                                ),
                                               ),
                                           ],
                                         ),
                                         trailing: PopupMenuButton<String>(
                                           onSelected: (value) {
                                             if (value == 'toggle_publish') {
-                                              _handleToggleSuppliesPublished(store);
+                                              _handleToggleSuppliesPublished(
+                                                store,
+                                              );
                                             } else if (value == 'delete') {
-                                              _handleDeleteSuppliesStore(store['id'], name);
+                                              _handleDeleteSuppliesStore(
+                                                store['id'],
+                                                name,
+                                              );
                                             }
                                           },
                                           itemBuilder: (context) => [
@@ -3143,9 +3432,16 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                               value: 'toggle_publish',
                                               child: Row(
                                                 children: [
-                                                  const Icon(Icons.verified, color: Colors.green),
+                                                  const Icon(
+                                                    Icons.verified,
+                                                    color: Colors.green,
+                                                  ),
                                                   const SizedBox(width: 8),
-                                                  Text(isPublished ? 'إلغاء النشر' : 'نشر'),
+                                                  Text(
+                                                    isPublished
+                                                        ? 'إلغاء النشر'
+                                                        : 'نشر',
+                                                  ),
                                                 ],
                                               ),
                                             ),
@@ -3153,7 +3449,10 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                                               value: 'delete',
                                               child: Row(
                                                 children: [
-                                                  Icon(Icons.delete, color: Colors.red),
+                                                  Icon(
+                                                    Icons.delete,
+                                                    color: Colors.red,
+                                                  ),
                                                   SizedBox(width: 8),
                                                   Text('حذف المتجر'),
                                                 ],

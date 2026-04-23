@@ -1850,7 +1850,9 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
             top: BorderSide(color: Color(0xFFE2E8F0)),
           ),
         ),
-        child: InkWell(
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
           onTap: isEnabled ? () => _showBookingDialog(context, db) : null,
           borderRadius: BorderRadius.circular(16),
           child: Ink(
@@ -1938,6 +1940,7 @@ class _DoctorDetailScreenState extends State<DoctorDetailScreen> {
               ],
             ),
           ),
+        ),
         ),
       ),
     );

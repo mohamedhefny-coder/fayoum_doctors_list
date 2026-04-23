@@ -1375,6 +1375,23 @@ class DoctorDatabaseService {
     }
   }
 
+  // الحصول على جميع أطباء الطوارئ 24 ساعة
+  Future<List<Doctor>> getEmergency24hDoctors() async {
+    try {
+      final response = await _client
+          .from('doctors')
+          .select()
+          .eq('is_published', true)
+          .eq('emergency_24h', true);
+
+      return (response as List)
+          .map((json) => Doctor.fromJson(json as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   // البحث عن أطباء حسب التخصص
   Future<List<Doctor>> getDoctorsBySpecialization(String specialization) async {
     try {

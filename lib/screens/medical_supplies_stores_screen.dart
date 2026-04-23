@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../services/admin_service.dart';
 import '../services/medical_supplies_media_service.dart';
-import 'admin_login_for_action_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class MedicalSuppliesStoresScreen extends StatefulWidget {
   const MedicalSuppliesStoresScreen({super.key});
@@ -41,19 +41,20 @@ class _MedicalSuppliesStoresScreenState
 
   final _adminService = AdminService();
 
-  Future<void> _openAddStore() async {
-    final isAdmin = await _adminService.isCurrentUserAdmin();
-    if (!mounted) return;
+  bool _isOwnerLoggedIn() {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return false;
+    final meta = user.userMetadata ?? const <String, dynamic>{};
+    return meta['user_type']?.toString() == 'medical_supplies_store';
+  }
 
-    var allowed = isAdmin;
+  Future<void> _openAddStore() async {
+    var allowed = _isOwnerLoggedIn();
     if (!allowed) {
       allowed =
           (await Navigator.of(context).push<bool>(
                 MaterialPageRoute(
-                  builder: (_) => const AdminLoginForActionScreen(
-                    title: 'تسجيل دخول المدير',
-                    subtitle: 'يلزم تسجيل الدخول لإضافة متجر مستلزمات طبية',
-                  ),
+                  builder: (_) => const _MedicalSuppliesOwnerLoginScreen(),
                 ),
               )) ==
               true;
@@ -121,6 +122,211 @@ class _MedicalSuppliesStoresScreenState
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MedicalSuppliesOwnerLoginScreen extends StatefulWidget {
+  const _MedicalSuppliesOwnerLoginScreen();
+
+  @override
+  State<_MedicalSuppliesOwnerLoginScreen> createState() =>
+      _MedicalSuppliesOwnerLoginScreenState();
+}
+
+class _MedicalSuppliesOwnerLoginScreenState
+    extends State<_MedicalSuppliesOwnerLoginScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
+  bool _obscure = true;
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _showSnack(String msg, {Color? color}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), backgroundColor: color),
+    );
+  }
+
+  Future<void> _login() async {
+    if (_loading) return;
+    final ok = _formKey.currentState?.validate() ?? false;
+    if (!ok) return;
+
+    setState(() => _loading = true);
+    try {
+      final auth = Supabase.instance.client.auth;
+      final res = await auth.signInWithPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      final user = res.user;
+      if (user == null) {
+        _showSnack('تعذر تسجيل الدخول. حاول مرة أخرى.', color: Colors.red);
+        return;
+      }
+
+      final meta = user.userMetadata ?? const <String, dynamic>{};
+      final userType = meta['user_type']?.toString();
+      if (userType != 'medical_supplies_store') {
+        await auth.signOut();
+        _showSnack('هذا الحساب ليس حساب متجر مستلزمات طبية.',
+            color: Colors.orange);
+        return;
+      }
+
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } on AuthException catch (e) {
+      _showSnack(e.message, color: Colors.red);
+    } catch (_) {
+      _showSnack('حدث خطأ غير متوقع أثناء تسجيل الدخول.', color: Colors.red);
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('تسجيل دخول متجر المستلزمات'),
+          backgroundColor: const Color(0xFF0284C7),
+          foregroundColor: Colors.white,
+        ),
+        body: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 520),
+              child: Card(
+                elevation: 2,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: Image.asset(
+                                'assets/images/medical_supplies.png',
+                                width: 44,
+                                height: 44,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return const Icon(Icons.healing, size: 44);
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Text(
+                                'استخدم بيانات الدخول التي أنشأها المدير للمتجر',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _emailController,
+                          keyboardType: TextInputType.emailAddress,
+                          textInputAction: TextInputAction.next,
+                          decoration: const InputDecoration(
+                            labelText: 'البريد الإلكتروني',
+                            prefixIcon: Icon(Icons.email_outlined),
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (v) {
+                            final value = (v ?? '').trim();
+                            if (value.isEmpty) return 'أدخل البريد الإلكتروني';
+                            if (!value.contains('@')) {
+                              return 'أدخل بريد إلكتروني صحيح';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _passwordController,
+                          obscureText: _obscure,
+                          textInputAction: TextInputAction.done,
+                          onFieldSubmitted: (_) => _login(),
+                          decoration: InputDecoration(
+                            labelText: 'كلمة المرور',
+                            prefixIcon: const Icon(Icons.lock_outline),
+                            border: const OutlineInputBorder(),
+                            suffixIcon: IconButton(
+                              onPressed: () {
+                                setState(() => _obscure = !_obscure);
+                              },
+                              icon: Icon(
+                                _obscure
+                                    ? Icons.visibility_outlined
+                                    : Icons.visibility_off_outlined,
+                              ),
+                            ),
+                          ),
+                          validator: (v) {
+                            if ((v ?? '').isEmpty) {
+                              return 'أدخل كلمة المرور';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          height: 46,
+                          child: ElevatedButton(
+                            onPressed: _loading ? null : _login,
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0284C7),
+                              foregroundColor: Colors.white,
+                            ),
+                            child: _loading
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: Colors.white,
+                                    ),
+                                  )
+                                : const Text(
+                                    'تسجيل الدخول',
+                                    style:
+                                        TextStyle(fontWeight: FontWeight.bold),
+                                  ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
@@ -891,7 +1097,8 @@ class _AddMedicalSuppliesStoreScreenState
   final _adminService = AdminService();
   final _mediaService = MedicalSuppliesMediaService();
   final _imagePicker = ImagePicker();
-  bool _checkedAdmin = false;
+  bool _checkedOwner = false;
+  bool _isSaving = false;
 
   final _formKey = GlobalKey<FormState>();
 
@@ -983,17 +1190,23 @@ class _AddMedicalSuppliesStoreScreenState
   @override
   void initState() {
     super.initState();
-    _guardAdmin();
+    _guardOwner();
   }
 
-  Future<void> _guardAdmin() async {
-    final isAdmin = await _adminService.isCurrentUserAdmin();
+  Future<void> _guardOwner() async {
+    final user = Supabase.instance.client.auth.currentUser;
+    final meta = user?.userMetadata ?? const <String, dynamic>{};
+    final userType = meta['user_type']?.toString();
+
     if (!mounted) return;
-    setState(() => _checkedAdmin = true);
-    if (!isAdmin) {
+    setState(() => _checkedOwner = true);
+
+    if (user == null || userType != 'medical_supplies_store') {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('غير مصرح: يلزم تسجيل الدخول كمدير لإضافة متجر'),
+          content: Text(
+            'غير مصرح: يلزم تسجيل الدخول ببيانات متجر المستلزمات لإضافة/تعديل البيانات',
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -1113,7 +1326,8 @@ class _AddMedicalSuppliesStoreScreenState
     });
   }
 
-  void _submit() {
+  Future<void> _submit() async {
+    if (_isSaving) return;
     if (!_formKey.currentState!.validate()) return;
 
     final gallery = _splitList(_galleryController.text);
@@ -1140,12 +1354,54 @@ class _AddMedicalSuppliesStoreScreenState
       facebookPage: facebook.isEmpty ? null : facebook,
     );
 
-    Navigator.pop(context, store);
+    setState(() => _isSaving = true);
+    try {
+      await _adminService.upsertMedicalSuppliesStoreForOwner(
+        data: {
+          'name': store.name,
+          'address': store.address,
+          'phone': store.phone,
+          'whatsapp': store.whatsappNumber,
+          'working_hours': store.hours,
+          'cover_image_url': store.coverImage,
+          'available_supplies': store.availableSupplies,
+          'gallery_image_urls': store.galleryImages,
+          'offers_and_discounts': store.offersAndDiscounts,
+          'has_delivery_service': store.hasDeliveryService,
+          'available_contracts': store.availableContracts,
+          'geo_location': store.geoLocation,
+          'facebook_page': store.facebookPage,
+        },
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم حفظ بيانات المتجر بنجاح'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pop(context, store);
+    } catch (e) {
+      if (!mounted) return;
+      var message = e.toString();
+      if (message.startsWith('Exception: ')) {
+        message = message.substring('Exception: '.length);
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (!_checkedAdmin) {
+    if (!_checkedOwner) {
       return const Directionality(
         textDirection: TextDirection.rtl,
         child: Scaffold(
@@ -1574,8 +1830,17 @@ class _AddMedicalSuppliesStoreScreenState
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
-                              onPressed: _submit,
-                              icon: const Icon(Icons.save_outlined),
+                              onPressed: _isSaving ? null : _submit,
+                              icon: _isSaving
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.save_outlined),
                               label: const Padding(
                                 padding: EdgeInsets.symmetric(vertical: 12),
                                 child: Text(

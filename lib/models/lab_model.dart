@@ -8,6 +8,9 @@ class LabModel {
   final String? phone;
   final String? whatsapp;
   final String? email;
+  final String? coverImageUrl;
+  final String? logoImageUrl;
+  final List<String> galleryImageUrls;
   final double? latitude;
   final double? longitude;
   final double? rating;
@@ -25,6 +28,9 @@ class LabModel {
     this.phone,
     this.whatsapp,
     this.email,
+    this.coverImageUrl,
+    this.logoImageUrl,
+    this.galleryImageUrls = const [],
     this.latitude,
     this.longitude,
     this.rating,
@@ -47,6 +53,11 @@ class LabModel {
       phone: json['phone'],
       whatsapp: json['whatsapp'],
       email: json['email'],
+      coverImageUrl: json['cover_image_url'],
+      logoImageUrl: json['logo_image_url'],
+      galleryImageUrls: json['gallery_image_urls'] != null
+          ? List<String>.from(json['gallery_image_urls'])
+          : const [],
       latitude: json['latitude']?.toDouble(),
       longitude: json['longitude']?.toDouble(),
       rating: json['rating']?.toDouble(),
@@ -74,6 +85,9 @@ class LabModel {
       'phone': phone,
       'whatsapp': whatsapp,
       'email': email,
+      'cover_image_url': coverImageUrl,
+      'logo_image_url': logoImageUrl,
+      'gallery_image_urls': galleryImageUrls,
       'latitude': latitude,
       'longitude': longitude,
       'rating': rating,

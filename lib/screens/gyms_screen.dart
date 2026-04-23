@@ -1,13 +1,73 @@
 import 'package:flutter/material.dart';
 
 import 'add_gym_screen.dart';
+import '../services/gym_service.dart';
 
-class GymsScreen extends StatelessWidget {
+class GymsScreen extends StatefulWidget {
   const GymsScreen({super.key});
 
   @override
+  State<GymsScreen> createState() => _GymsScreenState();
+}
+
+class _GymsScreenState extends State<GymsScreen> {
+  final _gymService = GymService();
+
+  bool _isLoading = true;
+  String? _loadError;
+  List<_GymData> _gyms = const <_GymData>[];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGyms();
+  }
+
+  Future<void> _loadGyms() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+
+    try {
+      final rows = await _gymService.getPublishedGyms();
+      final gyms = rows.map((row) {
+        final featuresRaw = row['features'];
+        final features = featuresRaw is List
+            ? featuresRaw.whereType<String>().toList()
+            : <String>[];
+
+        final workingHoursRaw = row['working_hours'];
+        final workingHours = workingHoursRaw is Map
+            ? Map<String, dynamic>.from(workingHoursRaw)
+            : null;
+
+        return _GymData(
+          name: (row['name'] ?? '').toString(),
+          address: (row['address'] ?? '').toString(),
+          hours: _gymService.formatWorkingHoursShort(workingHours),
+          phone: (row['phone'] ?? '').toString(),
+          features: features,
+        );
+      }).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _gyms = gyms;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final gyms = _demoGyms;
+    final gyms = _gyms;
 
     return Directionality(
       textDirection: TextDirection.rtl,
@@ -31,13 +91,42 @@ class GymsScreen extends StatelessWidget {
                 _buildStatsSection(gyms.length),
                 const SizedBox(height: 16),
                 Expanded(
-                  child: ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    itemCount: gyms.length,
-                    itemBuilder: (context, index) {
-                      return _GymCard(gym: gyms[index]);
-                    },
-                  ),
+                  child: _isLoading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _loadError != null
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Text('تعذر تحميل الصالات الرياضية.'),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _loadError!,
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                                const SizedBox(height: 12),
+                                OutlinedButton.icon(
+                                  onPressed: _loadGyms,
+                                  icon: const Icon(Icons.refresh),
+                                  label: const Text('إعادة المحاولة'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : RefreshIndicator(
+                          onRefresh: _loadGyms,
+                          child: ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            itemCount: gyms.length,
+                            itemBuilder: (context, index) {
+                              return _GymCard(gym: gyms[index]);
+                            },
+                          ),
+                        ),
                 ),
               ],
             ),
@@ -92,10 +181,13 @@ class GymsScreen extends StatelessWidget {
           Tooltip(
             message: 'إضافة جيم',
             child: InkWell(
-              onTap: () {
-                Navigator.of(context).push(
+              onTap: () async {
+                final ok = await Navigator.of(context).push<bool>(
                   MaterialPageRoute(builder: (_) => const AddGymScreen()),
                 );
+                if (ok == true) {
+                  _loadGyms();
+                }
               },
               borderRadius: BorderRadius.circular(12),
               child: Container(
@@ -158,10 +250,7 @@ class GymsScreen extends StatelessWidget {
                 children: [
                   const Text(
                     'إجمالي الصالات الرياضية المعروضة',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 4),
                   Text(
@@ -174,7 +263,7 @@ class GymsScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   const Text(
-                    'هذه قائمة عرض (Demo) وسيتم ربطها بالبيانات لاحقاً.',
+                    'اسحب لأسفل لتحديث القائمة.',
                     style: TextStyle(fontSize: 12, color: Colors.black54),
                   ),
                 ],
@@ -278,10 +367,7 @@ class _GymCard extends StatelessWidget {
                 const Icon(Icons.schedule, size: 18, color: Colors.black54),
                 const SizedBox(width: 6),
                 Expanded(
-                  child: Text(
-                    gym.hours,
-                    style: const TextStyle(fontSize: 12),
-                  ),
+                  child: Text(gym.hours, style: const TextStyle(fontSize: 12)),
                 ),
               ],
             ),
@@ -290,10 +376,7 @@ class _GymCard extends StatelessWidget {
               children: [
                 const Icon(Icons.phone, size: 18, color: Colors.black54),
                 const SizedBox(width: 6),
-                Text(
-                  gym.phone,
-                  style: const TextStyle(fontSize: 12),
-                ),
+                Text(gym.phone, style: const TextStyle(fontSize: 12)),
               ],
             ),
             if (gym.features.isNotEmpty) ...[
@@ -312,8 +395,9 @@ class _GymCard extends StatelessWidget {
                           color: const Color(0xFF22C55E).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color:
-                                const Color(0xFF22C55E).withValues(alpha: 0.25),
+                            color: const Color(
+                              0xFF22C55E,
+                            ).withValues(alpha: 0.25),
                           ),
                         ),
                         child: Text(
@@ -334,27 +418,3 @@ class _GymCard extends StatelessWidget {
     );
   }
 }
-
-const _demoGyms = <_GymData>[
-  _GymData(
-    name: 'Gym One',
-    address: 'الفيوم - شارع الجامعة',
-    hours: 'يومياً: 10 ص - 12 م',
-    phone: '01000000000',
-    features: ['كارديو', 'أوزان', 'مدربين', 'غرف تغيير'],
-  ),
-  _GymData(
-    name: 'Fit Zone',
-    address: 'الفيوم - المسلة',
-    hours: 'يومياً: 9 ص - 1 ص',
-    phone: '01111111111',
-    features: ['كارديو', 'كروس فيت', 'تدريب جماعي'],
-  ),
-  _GymData(
-    name: 'Power House',
-    address: 'الفيوم - دمو',
-    hours: 'يومياً: 11 ص - 11 م',
-    phone: '01222222222',
-    features: ['أوزان', 'مدربين', 'تغذية'],
-  ),
-];

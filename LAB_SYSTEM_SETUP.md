@@ -9,6 +9,10 @@
 3. انسخ والصق محتوى ملف `create_labs_table.sql`
 4. قم بتشغيل الأمر SQL
 
+> ملاحظة (اختياري/موصى به): لدعم صور المعامل (كفر/لوجو/معرض)
+> - شغّل ملف `create_labs_images_bucket.sql` لإنشاء Storage bucket وسياسات RLS
+> - شغّل ملف `add_labs_images_columns.sql` لإضافة أعمدة روابط الصور
+
 ### 2. التأكد من إعداد Authentication
 
 تأكد من أن Supabase Authentication مفعل في مشروعك:

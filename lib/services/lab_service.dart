@@ -5,6 +5,34 @@ import '../models/lab_model.dart';
 class LabService {
   final _supabase = Supabase.instance.client;
 
+  // إضافة تقييم لمعمل (عبر RPC) وإرجاع التقييم الجديد وعدد التقييمات
+  Future<Map<String, dynamic>> rateLab({
+    required String labId,
+    required int ratingValue,
+  }) async {
+    try {
+      final response = await _supabase.rpc(
+        'rate_lab',
+        params: {
+          'lab_id': labId,
+          'rating_value': ratingValue,
+        },
+      );
+
+      if (response is List && response.isNotEmpty) {
+        return Map<String, dynamic>.from(response.first as Map);
+      }
+      if (response is Map) {
+        return Map<String, dynamic>.from(response);
+      }
+      throw Exception('استجابة غير متوقعة من دالة التقييم');
+    } on PostgrestException catch (e) {
+      throw Exception('خطأ في إرسال التقييم: ${e.message}');
+    } catch (e) {
+      throw Exception('خطأ في إرسال التقييم: $e');
+    }
+  }
+
   // تسجيل حساب معمل جديد
   Future<Map<String, dynamic>> registerLab({
     required String labName,
@@ -103,6 +131,9 @@ class LabService {
     String? workingHours,
     String? offers,
     String? contracts,
+    String? coverImageUrl,
+    String? logoImageUrl,
+    List<String>? galleryImageUrls,
     List<String>? features,
     Map<String, List<String>>? tests,
     double? latitude,
@@ -132,6 +163,11 @@ class LabService {
       if (workingHours != null) labData['working_hours'] = workingHours;
       if (offers != null) labData['offers'] = offers;
       if (contracts != null) labData['contracts'] = contracts;
+      if (coverImageUrl != null) labData['cover_image_url'] = coverImageUrl;
+      if (logoImageUrl != null) labData['logo_image_url'] = logoImageUrl;
+      if (galleryImageUrls != null && galleryImageUrls.isNotEmpty) {
+        labData['gallery_image_urls'] = galleryImageUrls;
+      }
       if (features != null && features.isNotEmpty) labData['features'] = features;
       if (tests != null && tests.isNotEmpty) {
         // تحويل Map<String, List<String>> إلى Map<String, dynamic> لضمان التوافق مع JSONB

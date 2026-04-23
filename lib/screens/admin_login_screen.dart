@@ -31,6 +31,42 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   void initState() {
     super.initState();
     _initBiometric();
+    _tryAutoEnterAdminPanel();
+  }
+
+  Future<void> _tryAutoEnterAdminPanel() async {
+    if (!_hasSavedSession) return;
+
+    // Don't block the first frame; avoids jank.
+    await Future<void>.delayed(Duration.zero);
+    if (!mounted) return;
+
+    setState(() => _isLoading = true);
+
+    try {
+      final isAdmin = await _adminService.isCurrentUserAdmin();
+      if (!mounted) return;
+
+      if (isAdmin) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const AdminPanelScreen()),
+        );
+        return;
+      }
+
+      await _adminService.signOut();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('الحساب الحالي ليس حساب مدير. قم بتسجيل الدخول كمدير.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } catch (_) {
+      // Ignore and keep the login form.
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _initBiometric() async {
@@ -109,9 +145,17 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       }
     } catch (e) {
       if (mounted) {
+        var message = e.toString();
+        if (message.startsWith('Exception: ')) {
+          message = message.substring('Exception: '.length);
+        }
+        if (message.contains('Invalid login credentials') ||
+            message.toLowerCase().contains('invalid_credentials')) {
+          message = 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('خطأ في تسجيل الدخول: ${e.toString()}'),
+            content: Text('خطأ في تسجيل الدخول: $message'),
             backgroundColor: Colors.red,
           ),
         );

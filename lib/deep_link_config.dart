@@ -38,3 +38,13 @@ Uri buildPublicMedicalCenterUrl({required String centerName}) {
     },
   );
 }
+
+Uri buildPublicLabUrl({required String labName}) {
+  final base = Uri.parse(kPublicWebBaseUrl);
+  return base.replace(
+    queryParameters: {
+      ...base.queryParameters,
+      'lab': labName,
+    },
+  );
+}

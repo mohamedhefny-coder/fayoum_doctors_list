@@ -4,6 +4,143 @@ import '../models/doctor_model.dart';
 
 class AdminService {
   final SupabaseClient _supabase = Supabase.instance.client;
+  
+  Future<bool> _isUserAdminStrict(String userId) async {
+    try {
+      final row = await _supabase
+          .from('admins')
+          .select('id')
+          .eq('id', userId)
+          .maybeSingle();
+      return row != null;
+    } on PostgrestException catch (e) {
+      final lower = e.message.toLowerCase();
+  
+      // Common setup/config issues should be actionable.
+      if (lower.contains('relation') &&
+          lower.contains('admins') &&
+          (lower.contains('does not exist') || lower.contains('undefined'))) {
+        throw Exception(
+          'لا يمكن التحقق من صلاحيات المدير لأن جدول admins غير موجود في قاعدة البيانات.\n'
+          'الحل: نفّذ admin_setup.sql على Supabase SQL Editor ثم أضف UUID حساب المدير إلى جدول admins.\n'
+          'التفاصيل: ${_formatSupabaseError(e)}',
+        );
+      }
+  
+      if (lower.contains('row level security') ||
+          lower.contains('rls') ||
+          lower.contains('permission denied') ||
+          lower.contains('not allowed')) {
+        throw Exception(
+          'لا يمكن التحقق من صلاحيات المدير بسبب سياسات RLS على جدول admins.\n'
+          'الحل: نفّذ admin_setup.sql وتأكد من وجود Policy تسمح للمدير بقراءة جدول admins.\n'
+          'التفاصيل: ${_formatSupabaseError(e)}',
+        );
+      }
+  
+      throw Exception(
+        'تعذر التحقق من صلاحيات المدير.\n'
+        'التفاصيل: ${_formatSupabaseError(e)}',
+      );
+    }
+  }
+
+  String _friendlyExceptionMessage(Object e) {
+    final raw = e.toString();
+    const prefix = 'Exception: ';
+    if (raw.startsWith(prefix)) return raw.substring(prefix.length);
+    return raw;
+  }
+
+  String _friendlyAuthError(AuthApiException e) {
+    // Supabase GoTrue commonly returns these codes.
+    final code = (e.code ?? '').toLowerCase();
+    if (code == 'invalid_credentials' ||
+        code == 'invalid_login_credentials' ||
+        code == 'invalid_grant') {
+      return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+    }
+    if (code == 'email_not_confirmed') {
+      return 'الحساب غير مُفعّل بعد. فعّل البريد أو اجعل المستخدم Auto Confirm من لوحة Supabase';
+    }
+    if (code == 'user_not_found') {
+      return 'هذا الحساب غير موجود';
+    }
+    if (code == 'over_request_rate_limit') {
+      return 'تم تجاوز عدد المحاولات. حاول مرة أخرى لاحقاً';
+    }
+
+    // Fallback: prefer message, then code.
+    final msg = e.message.trim();
+    if (msg.isNotEmpty) return msg;
+    return code.isNotEmpty ? code : 'تعذر تسجيل الدخول';
+  }
+
+  Future<Map<String, dynamic>> upsertMedicalSuppliesStoreForOwner({
+    required Map<String, dynamic> data,
+  }) async {
+    final user = _supabase.auth.currentUser;
+    if (user == null) {
+      throw Exception('يلزم تسجيل الدخول ببيانات المتجر أولاً');
+    }
+
+    final meta = user.userMetadata ?? const <String, dynamic>{};
+    final userType = meta['user_type']?.toString();
+    if (userType != 'medical_supplies_store') {
+      throw Exception('هذا الحساب ليس حساب متجر مستلزمات طبية');
+    }
+
+    final payload = <String, dynamic>{
+      ...data,
+      // We use created_by as the owner id for owner-managed stores.
+      'created_by': user.id,
+      'updated_at': DateTime.now().toIso8601String(),
+    };
+
+    try {
+      // If the owner already created a store before, update the latest one.
+      final existing = await _supabase
+          .from('medical_supplies_stores')
+          .select('id')
+          .eq('created_by', user.id)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
+
+      if (existing == null) {
+        final inserted = await _supabase
+            .from('medical_supplies_stores')
+            .insert(payload)
+            .select()
+            .single();
+        return Map<String, dynamic>.from(inserted);
+      }
+
+      final updated = await _supabase
+          .from('medical_supplies_stores')
+          .update(payload)
+          .eq('id', existing['id'])
+          .select()
+          .single();
+      return Map<String, dynamic>.from(updated);
+    } on PostgrestException catch (e) {
+      final formatted = _formatSupabaseError(e);
+      final lower = formatted.toLowerCase();
+      if (lower.contains('row-level security') ||
+          lower.contains('rls') ||
+          lower.contains('permission denied') ||
+          lower.contains('not allowed')) {
+        throw Exception(
+          'لا توجد صلاحية لحفظ بيانات المتجر بسبب سياسات قاعدة البيانات (RLS).\n'
+          'الحل: نفّذ fix_medical_supplies_stores_owner_policies.sql على Supabase SQL Editor ثم جرّب مرة أخرى.\n'
+          'التفاصيل: $formatted',
+        );
+      }
+      throw Exception('فشل حفظ بيانات المتجر: $formatted');
+    } catch (e) {
+      throw Exception('فشل حفظ بيانات المتجر: ${_friendlyExceptionMessage(e)}');
+    }
+  }
 
   // ====== Medical centers (Admin) ======
   Future<List<Map<String, dynamic>>> getAllMedicalCenters() async {
@@ -379,16 +516,24 @@ class AdminService {
         password: password,
       );
 
+      final user = response.user;
+      if (user == null) {
+        throw Exception('تعذر تسجيل الدخول (لم يتم إرجاع بيانات المستخدم)');
+      }
+
       // التحقق من أن المستخدم مدير
-      final isAdmin = await _isUserAdmin(response.user!.id);
+      final isAdmin = await _isUserAdminStrict(user.id);
       if (!isAdmin) {
         await _supabase.auth.signOut();
         throw Exception('هذا الحساب ليس حساب مدير');
       }
 
       return response;
+    } on AuthApiException catch (e) {
+      throw Exception(_friendlyAuthError(e));
     } catch (e) {
-      rethrow;
+      // Ensure callers get a clean message.
+      throw Exception(_friendlyExceptionMessage(e));
     }
   }
 
@@ -402,12 +547,27 @@ class AdminService {
     try {
       final response = await _supabase
           .from('admins')
-          .select()
+          .select('id')
           .eq('id', userId)
           .maybeSingle();
       return response != null;
+    } on PostgrestException catch (e) {
+      final msg = (e.message).toLowerCase();
+      final details = (e.details ?? '').toString().toLowerCase();
+      final combined = '$msg $details';
+
+      // When RLS/policies are missing, Supabase often returns "permission denied".
+      if (combined.contains('permission denied') ||
+          combined.contains('row-level security') ||
+          combined.contains('rls') ||
+          combined.contains('not allowed')) {
+        throw Exception(
+          'لا توجد صلاحية لقراءة جدول admins. نفّذ admin_setup.sql (أو سكربت سياسات admins) على Supabase.',
+        );
+      }
+      rethrow;
     } catch (e) {
-      return false;
+      rethrow;
     }
   }
 
@@ -425,6 +585,11 @@ class AdminService {
       final currentUser = _supabase.auth.currentUser;
       if (currentUser == null) {
         throw Exception('يجب تسجيل دخول المدير أولاً');
+      }
+
+      final isAdmin = await _isUserAdminStrict(currentUser.id);
+      if (!isAdmin) {
+        throw Exception('غير مصرح: هذه العملية للمدير فقط');
       }
 
       // فحص مسبق لتفادي إنشاء مستخدم Auth بدون سجل في جدول doctors

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models/hospital_model.dart';
+import '../services/hospital_service.dart';
+import 'add_hospital_screen.dart';
 import 'hospital_details_screen.dart';
 
 class PrivateHospitalsScreen extends StatefulWidget {
@@ -12,6 +14,7 @@ class PrivateHospitalsScreen extends StatefulWidget {
 
 class _PrivateHospitalsScreenState extends State<PrivateHospitalsScreen> {
   final _searchController = TextEditingController();
+  final _hospitalService = HospitalService();
 
   final List<String> _serviceFilters = const [
     'طوارئ 24 ساعة',
@@ -23,20 +26,59 @@ class _PrivateHospitalsScreenState extends State<PrivateHospitalsScreen> {
 
   final Set<String> _selectedServices = <String>{};
 
-  late final List<HospitalModel> _allHospitals = <HospitalModel>[
-    const HospitalModel(
-      id: 'alshifa',
-      name: 'مستشفى الشفا',
-      // ملاحظة: املأ البيانات الفعلية لاحقاً (العنوان/الهاتف/الموقع)
-      address: null,
-      phone: null,
-      latitude: null,
-      longitude: null,
-      rating: null,
-      ratingCount: null,
-      services: <String>['طوارئ 24 ساعة', 'أشعة', 'معمل'],
-    ),
-  ];
+  List<HospitalModel> _allHospitals = <HospitalModel>[];
+  bool _isLoading = true;
+  String? _loadError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadHospitals();
+  }
+
+  Future<void> _loadHospitals() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
+
+    try {
+      final rows = await _hospitalService.getPublishedHospitals();
+
+      final models = rows.map((row) {
+        final departmentsRaw = row['departments'];
+        final departments = departmentsRaw is List
+            ? departmentsRaw.whereType<String>().toList()
+            : <String>[];
+
+        final hasEmergency = row['has_emergency_24'] == true;
+        final services = <String>[
+          if (hasEmergency) 'طوارئ 24 ساعة',
+          ...departments,
+        ];
+
+        return HospitalModel(
+          id: (row['id'] ?? '').toString(),
+          name: (row['name'] ?? '').toString(),
+          address: row['address']?.toString(),
+          phone: row['phone']?.toString(),
+          services: services,
+        );
+      }).toList();
+
+      if (!mounted) return;
+      setState(() {
+        _allHospitals = models;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -55,7 +97,9 @@ class _PrivateHospitalsScreenState extends State<PrivateHospitalsScreen> {
 
       final matchesServices =
           _selectedServices.isEmpty ||
-          _selectedServices.every((s) => h.services.contains(s));
+          _selectedServices.every(
+            (s) => h.services.any((hs) => hs.contains(s)),
+          );
 
       return matchesText && matchesServices;
     }).toList();
@@ -78,7 +122,31 @@ class _PrivateHospitalsScreenState extends State<PrivateHospitalsScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        appBar: AppBar(title: const Text('مستشفيات خاصة')),
+        appBar: AppBar(
+          title: const Text('مستشفيات خاصة'),
+          actions: [
+            IconButton(
+              tooltip: 'إضافة مستشفى',
+              onPressed: () async {
+                final ok = await Navigator.of(context).push<bool>(
+                  MaterialPageRoute(builder: (_) => const AddHospitalScreen()),
+                );
+                if (ok == true) {
+                  _loadHospitals();
+                }
+              },
+              icon: Image.asset(
+                'assets/images/priv.hospital.PNG',
+                width: 48,
+                height: 48,
+                filterQuality: FilterQuality.high,
+                errorBuilder: (context, error, stackTrace) {
+                  return const Icon(Icons.business);
+                },
+              ),
+            ),
+          ],
+        ),
         body: Column(
           children: [
             Padding(
@@ -139,20 +207,52 @@ class _PrivateHospitalsScreenState extends State<PrivateHospitalsScreen> {
             ),
             const SizedBox(height: 8),
             Expanded(
-              child: hospitals.isEmpty
+              child: _isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _loadError != null
+                  ? Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Text('تعذر تحميل المستشفيات.'),
+                            const SizedBox(height: 8),
+                            Text(
+                              _loadError!,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: colorScheme.onSurfaceVariant,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            OutlinedButton.icon(
+                              onPressed: _loadHospitals,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('إعادة المحاولة'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : hospitals.isEmpty
                   ? const Center(child: Text('لا توجد نتائج مطابقة.'))
-                  : ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
-                      itemCount: hospitals.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 12),
-                      itemBuilder: (context, index) {
-                        final h = hospitals[index];
-                        return _HospitalCard(
-                          hospital: h,
-                          onTap: () => _openDetails(h),
-                        );
-                      },
+                  : RefreshIndicator(
+                      onRefresh: _loadHospitals,
+                      child: ListView.separated(
+                        padding: const EdgeInsets.fromLTRB(16, 10, 16, 16),
+                        itemCount: hospitals.length,
+                        separatorBuilder: (context, index) =>
+                            const SizedBox(height: 12),
+                        itemBuilder: (context, index) {
+                          final h = hospitals[index];
+                          return _HospitalCard(
+                            hospital: h,
+                            onTap: () => _openDetails(h),
+                          );
+                        },
+                      ),
                     ),
             ),
           ],
@@ -189,18 +289,29 @@ class _HospitalCard extends StatelessWidget {
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 56,
-                  height: 56,
+                  width: 68,
+                  height: 68,
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(18),
                     color: colorScheme.primary.withValues(alpha: 0.12),
                   ),
-                  child: Icon(
-                    Icons.business,
-                    color: colorScheme.primary,
-                    size: 28,
+                  child: Center(
+                    child: Image.asset(
+                      'assets/images/priv.hospital.PNG',
+                      width: 68,
+                      height: 68,
+                      filterQuality: FilterQuality.high,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.business,
+                          color: colorScheme.primary,
+                          size: 44,
+                        );
+                      },
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),

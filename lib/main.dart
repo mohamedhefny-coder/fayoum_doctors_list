@@ -13,6 +13,7 @@ import 'screens/doctor_login_screen.dart';
 import 'screens/doctor_profile_screen.dart';
 import 'screens/doctor_detail_screen.dart';
 import 'screens/specialty_doctors_screen.dart';
+import 'screens/emergency_doctors_screen.dart';
 import 'screens/quick_actions_screen.dart';
 import 'screens/my_appointments_screen.dart';
 import 'screens/contact_us_screen.dart';
@@ -51,9 +52,9 @@ void _registerSecretAdminTap(BuildContext context) {
   if (_secretAdminTapCount >= 3) {
     _secretAdminTapCount = 0;
     _secretAdminTapTimer = null;
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const AdminLoginScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const AdminLoginScreen()));
     return;
   }
 
@@ -110,6 +111,12 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
       _openMedicalCenterByName(medicalCenterName);
       return;
     }
+
+    final labName = uri.queryParameters['lab']?.trim();
+    if (labName != null && labName.isNotEmpty) {
+      _openLabByName(labName);
+      return;
+    }
   }
 
   Future<void> _initDeepLinks() async {
@@ -147,7 +154,41 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
     final medicalCenterName = _extractMedicalCenterName(uri);
     if (medicalCenterName != null) {
       _openMedicalCenterByName(medicalCenterName);
+      return;
     }
+
+    final labName = _extractLabName(uri);
+    if (labName != null) {
+      _openLabByName(labName);
+    }
+  }
+
+  String? _extractLabName(Uri uri) {
+    if (uri.scheme != 'fayoumdoctors') return null;
+
+    // Supports:
+    // - fayoumdoctors://lab?name=...
+    // - fayoumdoctors://lab/<name>
+    // - fayoumdoctors://app/lab?name=...
+    final isLabHost = uri.host == 'lab';
+    final isLabPath =
+        uri.pathSegments.isNotEmpty && uri.pathSegments.first == 'lab';
+    if (!isLabHost && !isLabPath) return null;
+
+    final fromQuery = uri.queryParameters['name']?.trim();
+    if (fromQuery != null && fromQuery.isNotEmpty) return fromQuery;
+
+    if (isLabHost && uri.pathSegments.isNotEmpty) {
+      final name = uri.pathSegments.first.trim();
+      return name.isNotEmpty ? name : null;
+    }
+
+    if (isLabPath && uri.pathSegments.length > 1) {
+      final name = uri.pathSegments[1].trim();
+      return name.isNotEmpty ? name : null;
+    }
+
+    return null;
   }
 
   String? _extractDoctorId(Uri uri) {
@@ -209,7 +250,8 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
     // - fayoumdoctors://app/medicalcenter?name=...
     final isCenterHost = uri.host == 'medicalcenter';
     final isCenterPath =
-        uri.pathSegments.isNotEmpty && uri.pathSegments.first == 'medicalcenter';
+        uri.pathSegments.isNotEmpty &&
+        uri.pathSegments.first == 'medicalcenter';
     if (!isCenterHost && !isCenterPath) return null;
 
     final fromQuery = uri.queryParameters['name']?.trim();
@@ -295,6 +337,25 @@ class _FayoumDoctorsAppState extends State<FayoumDoctorsApp> {
       });
     } catch (_) {
       _showSnack('تعذر فتح صفحة المركز الطبي.');
+    } finally {
+      _isHandlingLink = false;
+    }
+  }
+
+  Future<void> _openLabByName(String name) async {
+    if (_isHandlingLink) return;
+    _isHandlingLink = true;
+
+    try {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final nav = _navigatorKey.currentState;
+        if (nav == null) return;
+        nav.push(
+          MaterialPageRoute(builder: (_) => LabsScreen(initialLabName: name)),
+        );
+      });
+    } catch (_) {
+      _showSnack('تعذر فتح صفحة المعمل.');
     } finally {
       _isHandlingLink = false;
     }
@@ -1018,11 +1079,7 @@ class _HeaderContent extends StatelessWidget {
                             },
                           ),
                         )
-                      : Icon(
-                          Icons.person,
-                          color: AppColors.primary,
-                          size: 28,
-                        ),
+                      : Icon(Icons.person, color: AppColors.primary, size: 28),
                 ),
               ),
             ),
@@ -1533,6 +1590,16 @@ class _QuickCategoryCard extends StatelessWidget {
     final imageFit = BoxFit.cover;
 
     void openCategory() {
+      if (category.label == 'طوارئ') {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EmergencyDoctorsScreen(headerColor: category.color),
+          ),
+        );
+        return;
+      }
+
       if (category.label == 'مستشفيات حكومية') {
         Navigator.push(
           context,

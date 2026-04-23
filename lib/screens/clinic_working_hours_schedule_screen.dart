@@ -25,6 +25,13 @@ class _ClinicWorkingHoursScheduleScreenState
   final _dbService = DoctorDatabaseService();
   final _notesController = TextEditingController();
 
+  int _toMinutes(TimeOfDay t) => t.hour * 60 + t.minute;
+
+  TimeOfDay _fromMinutes(int totalMinutes) {
+    final clamped = totalMinutes.clamp(0, 23 * 60 + 59);
+    return TimeOfDay(hour: clamped ~/ 60, minute: clamped % 60);
+  }
+
   final List<String> _weekDays = const [
     'السبت',
     'الأحد',
@@ -151,7 +158,13 @@ class _ClinicWorkingHoursScheduleScreenState
         },
       );
       if (picked == null) return;
-      setState(() => _dayStart[i] = picked);
+      setState(() {
+        _dayStart[i] = picked;
+        final end = _dayEnd[i];
+        if (end != null && _toMinutes(end) <= _toMinutes(picked)) {
+          _dayEnd[i] = _fromMinutes(_toMinutes(picked) + 60);
+        }
+      });
     }
 
     Future<void> pickEnd(int i) async {
@@ -170,7 +183,13 @@ class _ClinicWorkingHoursScheduleScreenState
         },
       );
       if (picked == null) return;
-      setState(() => _dayEnd[i] = picked);
+      setState(() {
+        _dayEnd[i] = picked;
+        final start = _dayStart[i];
+        if (start != null && _toMinutes(picked) <= _toMinutes(start)) {
+          _dayStart[i] = _fromMinutes(_toMinutes(picked) - 60);
+        }
+      });
     }
 
     final btnStyle = OutlinedButton.styleFrom(
@@ -227,8 +246,8 @@ class _ClinicWorkingHoursScheduleScreenState
               ...List<Widget>.generate(7, (i) {
                 final enabled = _dayEnabled[i];
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 8),
+                  padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: Colors.white,
                     borderRadius: BorderRadius.circular(12),
@@ -257,31 +276,44 @@ class _ClinicWorkingHoursScheduleScreenState
                           ),
                           Switch(
                             value: enabled,
-                            onChanged: (v) =>
-                                setState(() => _dayEnabled[i] = v),
+                            onChanged: (v) => setState(() {
+                              _dayEnabled[i] = v;
+                              if (v) {
+                                _dayStart[i] ??= const TimeOfDay(
+                                  hour: 9,
+                                  minute: 0,
+                                );
+                                _dayEnd[i] ??= const TimeOfDay(
+                                  hour: 17,
+                                  minute: 0,
+                                );
+                              }
+                            }),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: enabled ? () => pickStart(i) : null,
-                              style: btnStyle,
-                              child: Text('بداية: ${fmt(_dayStart[i])}'),
+                      if (enabled) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => pickStart(i),
+                                style: btnStyle,
+                                child: Text('بداية: ${fmt(_dayStart[i])}'),
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: OutlinedButton(
-                              onPressed: enabled ? () => pickEnd(i) : null,
-                              style: btnStyle,
-                              child: Text('نهاية: ${fmt(_dayEnd[i])}'),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => pickEnd(i),
+                                style: btnStyle,
+                                child: Text('نهاية: ${fmt(_dayEnd[i])}'),
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 );
