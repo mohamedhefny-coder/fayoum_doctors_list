@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Method of Preparation Slide</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      width: 1920px;
+      height: 1080px;
+      overflow: hidden;
+      font-family: 'Poppins', sans-serif;
+      background: #0d0d1a;
+    }
+
+    .slide {
+      width: 1920px;
+      height: 1080px;
+      position: relative;
+      background: linear-gradient(135deg, #0d0d1a 0%, #1a0a2e 40%, #2d0a3e 70%, #1a0d2e 100%);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* --- Decorative Background Circles --- */
+    .bg-circle {
+      position: absolute;
+      border-radius: 50%;
+      pointer-events: none;
+    }
+    .bg-c1 {
+      width: 800px; height: 800px;
+      top: -300px; right: -200px;
+      background: radial-gradient(circle, rgba(160,60,220,0.25) 0%, transparent 70%);
+    }
+    .bg-c2 {
+      width: 600px; height: 600px;
+      bottom: -200px; left: -100px;
+      background: radial-gradient(circle, rgba(90,40,180,0.3) 0%, transparent 70%);
+    }
+    .bg-c3 {
+      width: 400px; height: 400px;
+      top: 200px; left: 600px;
+      background: radial-gradient(circle, rgba(240,180,80,0.08) 0%, transparent 70%);
+    }
+
+    /* --- Grid pattern --- */
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+      background-size: 60px 60px;
+      pointer-events: none;
+    }
+
+    /* --- Left accent bar --- */
+    .left-bar {
+      position: absolute;
+      left: 0; top: 0; bottom: 0;
+      width: 6px;
+      background: linear-gradient(to bottom, #f0b86e, #c86dd7, #6a3de8);
+    }
+
+    /* --- Top accent line --- */
+    .top-line {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(to right, #f0b86e, #c86dd7, #6a3de8, transparent);
+    }
+
+    /* --- Header area --- */
+    .header {
+      position: relative;
+      padding: 48px 80px 0 80px;
+      z-index: 10;
+    }
+
+    .subtitle-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(240,184,110,0.12);
+      border: 1px solid rgba(240,184,110,0.3);
+      border-radius: 50px;
+      padding: 6px 20px;
+      margin-bottom: 18px;
+    }
+    .subtitle-label span {
+      font-size: 15px;
+      font-weight: 600;
+      color: #f0b86e;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+    }
+    .subtitle-label .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #f0b86e;
+      box-shadow: 0 0 8px #f0b86e;
+    }
+
+    .main-title {
+      font-size: 72px;
+      font-weight: 900;
+      line-height: 1.05;
+      background: linear-gradient(90deg, #f0b86e 0%, #e8a0d0 40%, #c86dd7 70%, #8b5cf6 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      letter-spacing: -1px;
+      filter: drop-shadow(0 0 30px rgba(200,109,215,0.4));
+    }
+
+    .title-underline {
+      width: 220px;
+      height: 4px;
+      background: linear-gradient(to right, #f0b86e, #c86dd7);
+      border-radius: 2px;
+      margin-top: 14px;
+      box-shadow: 0 0 15px rgba(200,109,215,0.6);
+    }
+
+    /* --- Cards Container --- */
+    .cards-row {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      gap: 36px;
+      padding: 48px 80px 0 80px;
+      align-items: stretch;
+    }
+
+    /* --- Arrow between cards --- */
+    .arrow-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      width: 60px;
+    }
+
+    /* --- Single Card --- */
+    .card {
+      flex: 1;
+      border-radius: 24px;
+      padding: 36px 38px;
+      position: relative;
+      overflow: hidden;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+
+    .card-oil {
+      background: linear-gradient(145deg, rgba(240,184,110,0.12) 0%, rgba(240,184,110,0.04) 100%);
+      border: 1px solid rgba(240,184,110,0.35);
+      box-shadow: 0 8px 40px rgba(240,184,110,0.1), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .card-aqueous {
+      background: linear-gradient(145deg, rgba(139,92,246,0.15) 0%, rgba(139,92,246,0.05) 100%);
+      border: 1px solid rgba(139,92,246,0.4);
+      box-shadow: 0 8px 40px rgba(139,92,246,0.12), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+    .card-emulsion {
+      background: linear-gradient(145deg, rgba(200,109,215,0.15) 0%, rgba(200,109,215,0.05) 100%);
+      border: 1px solid rgba(200,109,215,0.4);
+      box-shadow: 0 8px 40px rgba(200,109,215,0.12), inset 0 1px 0 rgba(255,255,255,0.08);
+    }
+
+    /* Glow corner on each card */
+    .card::before {
+      content: '';
+      position: absolute;
+      top: -1px; left: -1px;
+      width: 80px; height: 80px;
+      border-radius: 24px 0 80px 0;
+      opacity: 0.5;
+    }
+    .card-oil::before   { background: radial-gradient(circle, #f0b86e, transparent); }
+    .card-aqueous::before { background: radial-gradient(circle, #8b5cf6, transparent); }
+    .card-emulsion::before { background: radial-gradient(circle, #c86dd7, transparent); }
+
+    /* Step badge */
+    .step-badge {
+      position: absolute;
+      top: 24px; right: 28px;
+      width: 48px; height: 48px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .badge-oil      { background: linear-gradient(135deg, #f0b86e, #e07a20); box-shadow: 0 4px 20px rgba(240,184,110,0.5); }
+    .badge-aqueous  { background: linear-gradient(135deg, #8b5cf6, #5b21b6); box-shadow: 0 4px 20px rgba(139,92,246,0.5); }
+    .badge-emulsion { background: linear-gradient(135deg, #c86dd7, #7b3f98); box-shadow: 0 4px 20px rgba(200,109,215,0.5); }
+
+    /* Icon circle */
+    .icon-circle {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 34px;
+      margin-bottom: 20px;
+    }
+    .icon-oil      { background: rgba(240,184,110,0.15); border: 1.5px solid rgba(240,184,110,0.4); }
+    .icon-aqueous  { background: rgba(139,92,246,0.15); border: 1.5px solid rgba(139,92,246,0.4); }
+    .icon-emulsion { background: rgba(200,109,215,0.15); border: 1.5px solid rgba(200,109,215,0.4); }
+
+    /* Card title */
+    .card-title {
+      font-size: 26px;
+      font-weight: 800;
+      margin-bottom: 6px;
+      letter-spacing: -0.3px;
+    }
+    .ct-oil      { color: #f0b86e; }
+    .ct-aqueous  { color: #a78bfa; }
+    .ct-emulsion { color: #d86de8; }
+
+    .card-subtitle {
+      font-size: 13px;
+      color: rgba(255,255,255,0.45);
+      font-weight: 500;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-bottom: 22px;
+    }
+
+    /* Divider */
+    .card-divider {
+      height: 1px;
+      border-radius: 1px;
+      margin-bottom: 22px;
+    }
+    .div-oil      { background: linear-gradient(to right, rgba(240,184,110,0.5), transparent); }
+    .div-aqueous  { background: linear-gradient(to right, rgba(139,92,246,0.5), transparent); }
+    .div-emulsion { background: linear-gradient(to right, rgba(200,109,215,0.5), transparent); }
+
+    /* Bullet items */
+    .bullet-list { list-style: none; display: flex; flex-direction: column; gap: 18px; }
+
+    .bullet-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 14px;
+      font-size: 18px;
+      color: rgba(255,255,255,0.88);
+      font-weight: 400;
+      line-height: 1.55;
+    }
+
+    .bullet-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      margin-top: 8px;
+    }
+    .dot-oil      { background: #f0b86e; box-shadow: 0 0 8px rgba(240,184,110,0.8); }
+    .dot-aqueous  { background: #8b5cf6; box-shadow: 0 0 8px rgba(139,92,246,0.8); }
+    .dot-emulsion { background: #c86dd7; box-shadow: 0 0 8px rgba(200,109,215,0.8); }
+
+    .highlight {
+      font-weight: 700;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 17px;
+    }
+    .hl-oil      { color: #f0b86e; background: rgba(240,184,110,0.12); }
+    .hl-aqueous  { color: #a78bfa; background: rgba(139,92,246,0.12); }
+    .hl-emulsion { color: #d86de8; background: rgba(200,109,215,0.12); }
+
+    /* Temperature badge inline */
+    .temp-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 10px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 16px;
+    }
+    .tb-oil      { background: rgba(240,184,110,0.2); color: #f0b86e; border: 1px solid rgba(240,184,110,0.4); }
+    .tb-aqueous  { background: rgba(139,92,246,0.2); color: #a78bfa; border: 1px solid rgba(139,92,246,0.4); }
+
+    /* --- Footer --- */
+    .footer {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 80px;
+      background: rgba(255,255,255,0.03);
+      border-top: 1px solid rgba(255,255,255,0.07);
+      z-index: 10;
+    }
+    .footer-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .footer-dot { width: 8px; height: 8px; border-radius: 50%; background: #f0b86e; box-shadow: 0 0 6px #f0b86e; }
+    .footer-text {
+      font-size: 13px;
+      color: rgba(255,255,255,0.35);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+    .footer-steps {
+      display: flex;
+      gap: 8px;
+    }
+    .footer-step {
+      width: 36px; height: 4px;
+      border-radius: 2px;
+    }
+    .fs-1 { background: #f0b86e; box-shadow: 0 0 8px #f0b86e; }
+    .fs-2 { background: #8b5cf6; box-shadow: 0 0 8px #8b5cf6; }
+    .fs-3 { background: #c86dd7; box-shadow: 0 0 8px #c86dd7; }
+  </style>
+</head>
+<body>
+<div class="slide">
+
+  <!-- Background decoration -->
+  <div class="bg-circle bg-c1"></div>
+  <div class="bg-circle bg-c2"></div>
+  <div class="bg-circle bg-c3"></div>
+  <div class="grid-overlay"></div>
+  <div class="left-bar"></div>
+  <div class="top-line"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="subtitle-label">
+      <div class="dot"></div>
+      <span>Pharmaceutical Lab &middot; Emulsion Preparation</span>
+    </div>
+    <div class="main-title">METHOD OF PREPARATION</div>
+    <div class="title-underline"></div>
+  </div>
+
+  <!-- Cards Row -->
+  <div class="cards-row">
+
+    <!-- CARD 1: Oil Phase -->
+    <div class="card card-oil">
+      <div class="step-badge badge-oil">01</div>
+      <div class="icon-circle icon-oil">&#129396;</div>
+      <div class="card-title ct-oil">Oil Phase</div>
+      <div class="card-subtitle">Porcelain Dish &middot; Water Bath</div>
+      <div class="card-divider div-oil"></div>
+      <ul class="bullet-list">
+        <li class="bullet-item">
+          <div class="bullet-dot dot-oil"></div>
+          <span>Melt <span class="highlight hl-oil">Beeswax</span> in a porcelain dish on a water bath at <span class="temp-badge tb-oil">&#127777;&#65039; 75&deg;C</span></span>
+        </li>
+        <li class="bullet-item">
+          <div class="bullet-dot dot-oil"></div>
+          <span>Add <span class="highlight hl-oil">Mineral Oil</span> and stir gently to combine into a uniform oily phase</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Arrow 1 -->
+    <div class="arrow-wrap">
+      <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="26" cy="26" r="25" stroke="rgba(240,184,110,0.3)" stroke-width="1" stroke-dasharray="4 4"/>
+        <path d="M18 26 H34 M28 20 L34 26 L28 32" stroke="#f0b86e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <!-- CARD 2: Aqueous Phase -->
+    <div class="card card-aqueous">
+      <div class="step-badge badge-aqueous">02</div>
+      <div class="icon-circle icon-aqueous">&#9879;&#65039;</div>
+      <div class="card-title ct-aqueous">Aqueous Phase</div>
+      <div class="card-subtitle">Glass Beaker &middot; Heat Treatment</div>
+      <div class="card-divider div-aqueous"></div>
+      <ul class="bullet-list">
+        <li class="bullet-item">
+          <div class="bullet-dot dot-aqueous"></div>
+          <span>Dissolve <span class="highlight hl-aqueous">Borax</span> completely in distilled water inside a glass beaker</span>
+        </li>
+        <li class="bullet-item">
+          <div class="bullet-dot dot-aqueous"></div>
+          <span>Heat the solution to <span class="temp-badge tb-aqueous">&#127777;&#65039; 75&deg;C</span> to ensure full dissolution and stability</span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Arrow 2 -->
+    <div class="arrow-wrap">
+      <svg width="52" height="52" viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="26" cy="26" r="25" stroke="rgba(200,109,215,0.3)" stroke-width="1" stroke-dasharray="4 4"/>
+        <path d="M18 26 H34 M28 20 L34 26 L28 32" stroke="#c86dd7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+
+    <!-- CARD 3: Emulsification -->
+    <div class="card card-emulsion">
+      <div class="step-badge badge-emulsion">03</div>
+      <div class="icon-circle icon-emulsion">&#128300;</div>
+      <div class="card-title ct-emulsion">Emulsification</div>
+      <div class="card-subtitle">Continuous Mixing &middot; Final Product</div>
+      <div class="card-divider div-emulsion"></div>
+      <ul class="bullet-list">
+        <li class="bullet-item">
+          <div class="bullet-dot dot-emulsion"></div>
+          <span>Add borax solution to the <span class="highlight hl-emulsion">oily phase</span> with constant stirring</span>
+        </li>
+        <li class="bullet-item">
+          <div class="bullet-dot dot-emulsion"></div>
+          <span>Mix on water bath for <span class="highlight hl-emulsion">4 &ndash; 5 minutes</span>, then remove from heat</span>
+        </li>
+        <li class="bullet-item">
+          <div class="bullet-dot dot-emulsion"></div>
+          <span>Continue mixing until a <span class="highlight hl-emulsion">smooth cream</span> is formed &#10024;</span>
+        </li>
+      </ul>
+    </div>
+
+  </div><!-- /cards-row -->
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-left">
+      <div class="footer-dot"></div>
+      <div class="footer-text">Cosmetic &amp; Pharmaceutical Formulation</div>
+    </div>
+    <div class="footer-steps">
+      <div class="footer-step fs-1"></div>
+      <div class="footer-step fs-2"></div>
+      <div class="footer-step fs-3"></div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
